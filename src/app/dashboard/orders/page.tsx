@@ -1,0 +1,1359 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
+import { Plus, Search, Trash2, Edit, Eye, Printer, Truck, Check, ChevronsUpDown } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { createClient } from "@/utils/supabase/client";
+import { toast } from "sonner";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useTenant } from "@/components/shared/TenantProvider";
+
+function ProductSelect({ 
+  value, 
+  onChange, 
+  options 
+}: { 
+  value: string; 
+  onChange: (val: string) => void; 
+  options: any[];
+}) {
+  const [open, setOpen] = React.useState(false);
+  
+  const selectedOption = options.find((opt) => opt.id === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        className="flex h-10 w-full justify-between items-center rounded-md border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500 font-normal hover:bg-gray-50 text-right"
+        title={selectedOption ? `${selectedOption.productName} - ${selectedOption.variantName}` : ""}
+      >
+        {selectedOption 
+          ? <span className="text-right w-full truncate">{`${selectedOption.productName} - ${selectedOption.variantName} (المتبقي: ${selectedOption.stock_quantity || 0})`}</span>
+          : <span className="text-gray-500 text-right w-full">-- اختر المنتج --</span>}
+        <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+      </PopoverTrigger>
+      <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[var(--radix-popover-trigger-width)] min-w-[300px] p-0" dir="rtl">
+        <Command>
+          <CommandInput placeholder="ابحث باسم المنتج أو المقاس..." />
+          <CommandList>
+            <CommandEmpty>لم يتم العثور على منتجات.</CommandEmpty>
+            <CommandGroup>
+              {options.map((option) => (
+                <CommandItem
+                  key={option.id}
+                  value={`${option.productName} ${option.variantName}`}
+                  onSelect={() => {
+                    onChange(option.id);
+                    setOpen(false);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <Check
+                    className={cn(
+                      "ml-2 h-4 w-4",
+                      value === option.id ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {option.productName} - {option.variantName} (المتبقي: {option.stock_quantity || 0})
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export default function OrdersPage() {
+  const { tenant } = useTenant();
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const [customerName, setCustomerName] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerCity, setCustomerCity] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
+  
+  const [orderItems, setOrderItems] = useState<any[]>([
+    { variantId: "", quantity: 1, unitPrice: "" }
+  ]);
+  const [shippingFee, setShippingFee] = useState("");
+  const [orderNotes, setOrderNotes] = useState("");
+  
+  const [products, setProducts] = useState<any[]>([]);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  
+  const [newStatus, setNewStatus] = useState("pending");
+  const [newPaymentStatus, setNewPaymentStatus] = useState("unpaid");
+  const [newStockLocation, setNewStockLocation] = useState<"inventory" | "shipping">("inventory");
+  const [newCourier, setNewCourier] = useState("");
+  const [newTracking, setNewTracking] = useState("");
+
+  const [activeTab, setActiveTab] = useState("active");
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkPaymentStatus, setBulkPaymentStatus] = useState("");
+  const [newNotes, setNewNotes] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void }>({ isOpen: false, title: "", message: "", onConfirm: () => {} });
+
+  const handleOpenStatus = (order: any) => {
+    if (expandedOrderId === order.id) {
+      setExpandedOrderId(null);
+      return;
+    }
+    setSelectedOrder(order);
+    setNewStatus(order.status || "pending");
+    setNewPaymentStatus(order.payment_status || "unpaid");
+    setNewStockLocation(order.source === "stock_in_inventory" ? "inventory" : "shipping");
+    
+    const shipment = Array.isArray(order.shipments) ? order.shipments[0] : order.shipments || {};
+    setNewCourier(shipment.courier || "");
+    setNewTracking(shipment.tracking_number || "");
+    setNewNotes(order.notes || "");
+    setExpandedOrderId(order.id);
+  };
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedOrderIds((prev) => [...prev, id]);
+    } else {
+      setSelectedOrderIds((prev) => prev.filter((i) => i !== id));
+    }
+  };
+
+  const handleBulkApply = async () => {
+    if (!bulkStatus && !bulkPaymentStatus) return;
+    
+    setConfirmDialog({
+      isOpen: true,
+      title: "تأكيد الإجراء الجماعي",
+      message: "هل أنت متأكد من تطبيق التغييرات على الطلبات المحددة؟",
+      onConfirm: async () => {
+        setIsSubmitting(true);
+        
+        // Process status update if selected
+        if (bulkStatus) {
+          const isStockDeducted = (status: string) => !["returned_inventory", "cancelled"].includes(status);
+          
+          for (const orderId of selectedOrderIds) {
+            const order = orders.find(o => o.id === orderId);
+            if (!order) continue;
+
+            const currentDeducted = isStockDeducted(order.status || "pending");
+            const finalDeducted = isStockDeducted(bulkStatus);
+
+            if (currentDeducted && !finalDeducted) {
+              // Restore stock
+              const items = order.order_items;
+              if (items && items.length > 0) {
+                for (const item of items) {
+                  const { data: variant } = await supabase.from("product_variants").select("stock_quantity").eq("id", item.product_variant_id).single();
+                  if (variant) {
+                    await supabase.from("product_variants").update({ stock_quantity: Number(variant.stock_quantity) + Number(item.quantity) }).eq("id", item.product_variant_id);
+                  }
+                }
+              }
+            } else if (!currentDeducted && finalDeducted) {
+              // Deduct stock
+              const items = order.order_items;
+              if (items && items.length > 0) {
+                for (const item of items) {
+                  const { data: variant } = await supabase.from("product_variants").select("stock_quantity").eq("id", item.product_variant_id).single();
+                  if (variant) {
+                    await supabase.from("product_variants").update({ stock_quantity: Math.max(0, Number(variant.stock_quantity) - Number(item.quantity)) }).eq("id", item.product_variant_id);
+                  }
+                }
+              }
+            }
+            
+            const orderSource = ["returned_inventory", "pending"].includes(bulkStatus) ? "stock_in_inventory" : "stock_in_shipping";
+            await supabase.from("orders").update({ status: bulkStatus, source: orderSource }).eq("id", order.id);
+          }
+        }
+
+        // Process payment update if selected
+        if (bulkPaymentStatus) {
+          await supabase.from("orders").update({ payment_status: bulkPaymentStatus }).in("id", selectedOrderIds);
+        }
+
+        toast.success("تم تطبيق التغييرات على الطلبات المحددة بنجاح");
+        fetchOrders();
+        setSelectedOrderIds([]);
+        setBulkStatus("");
+        setBulkPaymentStatus("");
+        setIsSubmitting(false);
+      }
+    });
+  };
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    fetchOrders();
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    const { data } = await supabase
+      .from("products")
+      .select(`*, product_variants (*)`);
+    setProducts(data || []);
+  };
+
+  const filteredOrders = orders.filter((order) => {
+    const searchMatch = (order.id || "").toString().toLowerCase().includes(searchTerm.toLowerCase()) || 
+           (order.customers?.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+           (order.customers?.phone || "").includes(searchTerm);
+           
+    const isDeleted = order.is_deleted === true;
+    if (activeTab === "deleted") {
+      return isDeleted && searchMatch;
+    } else {
+      return !isDeleted && searchMatch;
+    }
+  });
+
+  const allVariants = products.flatMap(p => 
+    (p.product_variants || []).map((v: any) => ({
+      id: v.id,
+      productName: p.name,
+      variantName: v.size,
+      price: v.selling_price,
+      stock_quantity: v.stock_quantity
+    }))
+  );
+
+  const handleOrderItemChange = (index: number, field: string, value: string) => {
+    const newItems = [...orderItems];
+    newItems[index][field] = value;
+    if (field === "variantId") {
+      const v = allVariants.find(av => av.id === value);
+      if (v) newItems[index].unitPrice = v.price?.toString() || "0";
+    }
+    setOrderItems(newItems);
+  };
+
+  const addOrderItem = () => setOrderItems([...orderItems, { variantId: "", quantity: 1, unitPrice: "" }]);
+  const removeOrderItem = (index: number) => {
+    const newItems = [...orderItems];
+    newItems.splice(index, 1);
+    setOrderItems(newItems);
+  };
+
+  const calculatedItemsTotal = orderItems.reduce((acc, item) => acc + (Number(item.quantity) * Number(item.unitPrice) || 0), 0);
+  const finalTotalAmount = calculatedItemsTotal + (Number(shippingFee) || 0);
+
+  const handleAddOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    // التحقق من توافر المخزون قبل إنشاء الطلب
+    for (const item of orderItems) {
+      if (!item.variantId) continue;
+      const { data: variantData } = await supabase
+        .from("product_variants")
+        .select("stock_quantity, size, products(name)")
+        .eq("id", item.variantId)
+        .single();
+        
+      if (variantData && variantData.stock_quantity < Number(item.quantity)) {
+        const productName = Array.isArray(variantData.products) ? variantData.products[0]?.name : (variantData.products as any)?.name;
+        toast.error(`❌ عذراً، لا يمكن إتمام الطلب! المخزون المتوفر من ${productName} (${variantData.size}) هو ${variantData.stock_quantity} فقط، وأنت طلبت ${item.quantity}.`);
+        setIsSubmitting(false);
+        return;
+      }
+    }
+    
+    let customerId = null;
+    
+    const { data: existingCustomer } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("phone", customerPhone)
+      .single();
+      
+    if (existingCustomer) {
+      customerId = existingCustomer.id;
+      await supabase
+        .from("customers")
+        .update({
+          name: customerName,
+          city: customerCity,
+          address: customerAddress
+        })
+        .eq("id", customerId);
+    } else {
+      const { data: customer, error: customerError } = await supabase
+        .from("customers")
+        .insert({
+          name: customerName,
+          phone: customerPhone,
+          city: customerCity,
+          address: customerAddress,
+          tenant_id: tenant?.id
+        })
+        .select("id")
+        .single();
+
+      if (customerError || !customer) {
+        setIsSubmitting(false);
+        return;
+      }
+      customerId = customer.id;
+    }
+
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert({
+        customer_id: customerId,
+        total_amount: finalTotalAmount,
+        status: "pending",
+        payment_status: "unpaid",
+        source: "stock_in_inventory",
+        tenant_id: tenant?.id,
+        notes: orderNotes
+      })
+      .select("id")
+      .single();
+
+    if (orderError || !order) {
+      setIsSubmitting(false);
+      return;
+    }
+
+    for (const item of orderItems) {
+      if (!item.variantId) continue;
+      await supabase
+        .from("order_items")
+        .insert({
+          order_id: order.id,
+          product_variant_id: item.variantId,
+          quantity: Number(item.quantity),
+          unit_price: Number(item.unitPrice)
+        });
+        
+      // التحقق من المخزون وتنبيه المستخدم
+      const { data: variantData } = await supabase
+        .from("product_variants")
+        .select(`stock_quantity, low_stock_threshold, size, products(name)`)
+        .eq("id", item.variantId)
+        .single();
+        
+      if (variantData && variantData.stock_quantity <= (variantData.low_stock_threshold || 5)) {
+        const productName = Array.isArray(variantData.products) ? variantData.products[0]?.name : (variantData.products as any)?.name;
+        toast(`⚠️ تنبيه: مخزون منخفض لـ ${productName} (${variantData.size}). المتبقي: ${variantData.stock_quantity}`, {
+          style: { background: '#FEF2F2', color: '#991B1B', border: '1px solid #F87171' },
+          duration: 6000
+        });
+      }
+    }
+
+    toast.success("تم إضافة الطلب بنجاح");
+    setIsOpen(false);
+    fetchOrders();
+    setIsSubmitting(false);
+    
+    setCustomerName("");
+    setCustomerPhone("");
+    setCustomerCity("");
+    setCustomerAddress("");
+    setOrderItems([{ variantId: "", quantity: 1, unitPrice: "" }]);
+    setShippingFee("");
+    setOrderNotes("");
+  };
+
+  const fetchOrders = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("orders")
+      .select(`
+        *,
+        customers ( name, phone, city, address ),
+        shipments ( courier, tracking_number ),
+        order_items ( id, product_variant_id, quantity, unit_price, product_variants ( size, products ( name ) ) )
+      `)
+      .order("created_at", { ascending: false });
+      
+    if (error) {
+      toast.error("فشل في تحميل الطلبات");
+    } else {
+      setOrders(data || []);
+    }
+    setLoading(false);
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch(status) {
+      case "pending": 
+        return <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold">في المخزن</span>;
+      case "shipped": 
+        return <span className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full text-xs font-bold">في شركة الشحن</span>;
+      case "delivered": 
+        return <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold">تم التوصيل ✅</span>;
+      case "returned_inventory": 
+        return <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-xs font-bold">مرتجع دخل المخزن</span>;
+      case "returned_shipping": 
+        return <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-xs font-bold">مرتجع في شركة الشحن</span>;
+      case "cancelled": 
+        return <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold">ملغي في شركة الشحن</span>;
+      default: 
+        return <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-xs font-bold">{status}</span>;
+    }
+  };
+
+  const getPaymentStatusBadge = (status: string) => {
+    switch(status) {
+      case "paid": 
+        return <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold">✅ مدفوع</span>;
+      case "partial": 
+        return <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold">⏳ مدفوع جزئياً</span>;
+      case "refunded": 
+        return <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold">🔄 مسترد</span>;
+      case "unpaid": 
+      default: 
+        return <span className="bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-xs font-bold">❌ غير مدفوع</span>;
+    }
+  };
+
+  const handleUpdateStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOrder) return;
+    setIsSubmitting(true);
+
+    const isStockDeducted = (status: string) => !["returned_inventory", "cancelled"].includes(status);
+    const currentDeducted = isStockDeducted(selectedOrder.status || "pending");
+    const finalDeducted = isStockDeducted(newStatus);
+
+    if (currentDeducted && !finalDeducted) {
+      // Restore stock
+      const items = selectedOrder.order_items;
+      for (const item of items) {
+        const { data: variant } = await supabase.from("product_variants").select("stock_quantity").eq("id", item.product_variant_id).single();
+        if (variant) {
+          await supabase.from("product_variants").update({ stock_quantity: Number(variant.stock_quantity) + Number(item.quantity) }).eq("id", item.product_variant_id);
+        }
+      }
+    } else if (!currentDeducted && finalDeducted) {
+      // Deduct stock
+      const items = selectedOrder.order_items;
+      for (const item of items) {
+        const { data: variant } = await supabase.from("product_variants").select("stock_quantity").eq("id", item.product_variant_id).single();
+        if (variant) {
+          await supabase.from("product_variants").update({ stock_quantity: Math.max(0, Number(variant.stock_quantity) - Number(item.quantity)) }).eq("id", item.product_variant_id);
+        }
+      }
+    }
+
+    const orderSource = ["returned_inventory", "pending"].includes(newStatus) ? "stock_in_inventory" : "stock_in_shipping";
+    
+    // We update the notes as well
+    const updateObj: any = { status: newStatus, payment_status: newPaymentStatus, source: orderSource };
+    if (newNotes !== undefined) {
+      updateObj.notes = newNotes;
+    }
+    const { error: orderError } = await supabase.from("orders").update(updateObj).eq("id", selectedOrder.id);
+    if (orderError) {
+      toast.error("حدث خطأ أثناء تحديث الطلب: تأكد من إضافة عمود notes في قاعدة البيانات");
+      console.error(orderError);
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (newCourier || newTracking) {
+      const { data: existingShipment, error: checkError } = await supabase.from("shipments").select("id").eq("order_id", selectedOrder.id).maybeSingle();
+      if (checkError) {
+        toast.error("خطأ في التحقق من الشحنة: " + checkError.message);
+      } else if (existingShipment) {
+        const { error: updateError } = await supabase.from("shipments").update({ courier: newCourier, tracking_number: newTracking || null }).eq("id", existingShipment.id);
+        if (updateError) {
+          console.error("Update shipment error:", updateError);
+          toast.error("حدث خطأ أثناء حفظ شركة الشحن: " + updateError.message);
+        }
+      } else {
+        const { error: insertError } = await supabase.from("shipments").insert({ 
+          order_id: selectedOrder.id, 
+          courier: newCourier, 
+          tracking_number: newTracking || null
+        });
+        if (insertError) {
+          console.error("Insert shipment error:", insertError);
+          toast.error("حدث خطأ أثناء حفظ شركة الشحن: تأكد من التحديث");
+        }
+      }
+    }
+    
+    toast.success("تم تحديث حالة الطلب بنجاح");
+    setExpandedOrderId(null);
+    fetchOrders();
+    setIsSubmitting(false);
+  };
+
+  const handleDeleteOrder = async (order: any) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "نقل للمحذوفات",
+      message: "هل أنت متأكد من نقل هذا الطلب للمحذوفات؟",
+      onConfirm: async () => {
+        // Update local state instantly
+        setOrders((prev) => prev.map(o => o.id === order.id ? { ...o, is_deleted: true } : o));
+
+        const { error } = await supabase.from("orders").update({ is_deleted: true }).eq("id", order.id);
+        if (error) {
+          toast.error("فشل في حذف الطلب");
+          fetchOrders(); // rollback on error
+        } else {
+          toast.success("تم نقل الطلب لسجل المحذوفات");
+        }
+      }
+    });
+  };
+
+  const handleRestoreOrder = async (order: any) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: "استعادة الطلب",
+      message: "هل أنت متأكد من استعادة هذا الطلب؟",
+      onConfirm: async () => {
+        // Update local state instantly
+        setOrders((prev) => prev.map(o => o.id === order.id ? { ...o, is_deleted: false } : o));
+
+        const { error } = await supabase.from("orders").update({ is_deleted: false }).eq("id", order.id);
+        if (error) {
+          console.error("Restore Error:", error);
+          toast.error("فشل في استعادة الطلب: " + error.message);
+          fetchOrders(); // rollback on error
+        } else {
+          toast.success("تم استعادة الطلب بنجاح");
+        }
+      }
+    });
+  };
+
+  const handleOpenDetails = (order: any) => {
+    setSelectedOrder(order);
+    setDetailsOpen(true);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedOrderIds(filteredOrders.map((o) => o.id));
+    } else {
+      setSelectedOrderIds([]);
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch(status) {
+      case "pending": return "في المخزن";
+      case "shipped": return "في شركة الشحن";
+      case "delivered": return "تم التوصيل";
+      case "returned_inventory": return "مرتجع لمخزن التاجر";
+      case "returned_shipping": return "مرتجع لشركة الشحن";
+      case "cancelled": return "ملغى";
+      default: return status;
+    }
+  };
+
+  const getPaymentStatusText = (status: string) => {
+    switch(status) {
+      case "unpaid": return "غير مدفوع";
+      case "paid": return "مدفوع";
+      case "partial": return "مدفوع جزئياً";
+      case "refunded": return "مسترد";
+      default: return status;
+    }
+  };
+
+  const handlePrintWaybill = (order: any) => {
+    const serial = String(orders.length - orders.findIndex(o => o.id === order.id)).padStart(4, '0');
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    const htmlContent = `
+      <html dir="rtl">
+        <head>
+          <title>بوليصة شحن - ${tenant?.name || 'ميتش'} #${serial}</title>
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #333; }
+            .waybill { border: 2px solid #000; padding: 30px; max-width: 800px; margin: 0 auto; border-radius: 10px; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
+            .title { font-size: 28px; font-weight: bold; margin-bottom: 10px; }
+            .order-number { font-size: 20px; color: #555; }
+            .info-section { display: flex; justify-content: space-between; margin-bottom: 30px; }
+            .info-group { margin-bottom: 10px; font-size: 16px; }
+            .info-label { font-weight: bold; width: 120px; display: inline-block; color: #555; }
+            .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            .table th, .table td { border: 1px solid #000; padding: 12px; text-align: right; }
+            .table th { background-color: #f8f9fa; font-weight: bold; }
+            .total { font-weight: bold; font-size: 22px; margin-top: 30px; text-align: left; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #000; }
+            .footer-note { text-align: center; margin-top: 40px; font-size: 14px; color: #777; }
+            
+            @media print {
+              body { padding: 0; }
+              .waybill { border: none; padding: 0; max-width: 100%; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="waybill">
+            <div class="header">
+              <div class="title">${tenant?.name || 'ميتش'} - بوليصة شحن</div>
+              <div class="order-number">طلب رقم: ${tenant?.name || 'ميتش'} #${serial}</div>
+            </div>
+            
+            <div class="info-section">
+              <div>
+                <div class="info-group"><span class="info-label">اسم العميل:</span> <span>${order.customers?.name || '-'}</span></div>
+                <div class="info-group"><span class="info-label">رقم الهاتف:</span> <span><bdi>${order.customers?.phone || '-'}</bdi></span></div>
+              </div>
+              <div>
+                <div class="info-group"><span class="info-label">المحافظة:</span> <span>${order.customers?.city || '-'}</span></div>
+                <div class="info-group"><span class="info-label">العنوان:</span> <span>${order.customers?.address || '-'}</span></div>
+              </div>
+            </div>
+            
+            <div class="info-section" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">
+              <div>
+                <div class="info-group"><span class="info-label">الحالة:</span> <span>${getStatusText(order.status)}</span></div>
+                <div class="info-group"><span class="info-label">حالة الدفع:</span> <span>${getPaymentStatusText(order.payment_status)}</span></div>
+                ${order.notes ? `<div class="info-group" style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px;"><span class="info-label">ملاحظات:</span> <span>${order.notes}</span></div>` : ''}
+              </div>
+              <div>
+                <div class="info-group"><span class="info-label">شركة الشحن:</span> <span>${Array.isArray(order.shipments) ? order.shipments[0]?.courier || '-' : order.shipments?.courier || '-'}</span></div>
+                <div class="info-group"><span class="info-label">رقم التتبع:</span> <span dir="ltr">${Array.isArray(order.shipments) ? order.shipments[0]?.tracking_number || '-' : order.shipments?.tracking_number || '-'}</span></div>
+              </div>
+            </div>
+            
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>المنتج</th>
+                  <th>الكمية</th>
+                  <th>السعر</th>
+                  <th>الإجمالي</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${(order.order_items || []).map((item: any) => `
+                  <tr>
+                    <td>${item.product_variants?.products?.name || 'منتج غير معروف'} - ${item.product_variants?.size || ''}</td>
+                    <td>${item.quantity}</td>
+                    <td>${item.unit_price} ج.م</td>
+                    <td>${(Number(item.quantity) * Number(item.unit_price)).toLocaleString()} ج.م</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            
+            <div class="total">
+              إجمالي المطلوب تحصيله: ${Number(order.total_amount).toLocaleString()} ج.م
+            </div>
+            
+            <div class="footer-note">
+              شكراً لتعاملكم معنا
+            </div>
+          </div>
+          <script>
+            window.onload = function() { window.print(); window.setTimeout(function() { window.close(); }, 500); }
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
+  const handlePrintMultipleWaybills = () => {
+    const selectedOrders = orders.filter(o => selectedOrderIds.includes(o.id));
+    if (selectedOrders.length === 0) return;
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    const htmlContent = `
+      <html dir="rtl">
+        <head>
+          <title>طباعة بوليصات الشحن - ${tenant?.name || 'ميتش'}</title>
+          <style>
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; color: #333; }
+            .waybill { border: 2px dashed #000; padding: 20px; max-width: 800px; margin: 0 auto 30px auto; border-radius: 10px; page-break-inside: avoid; }
+            .waybill:nth-child(3n) { page-break-after: always; margin-bottom: 0; }
+            .waybill:last-child { page-break-after: auto; margin-bottom: 0; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 15px; }
+            .title { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
+            .order-number { font-size: 18px; color: #555; }
+            .info-section { display: flex; justify-content: space-between; margin-bottom: 15px; }
+            .info-group { margin-bottom: 5px; font-size: 14px; }
+            .info-label { font-weight: bold; width: 100px; display: inline-block; color: #555; }
+            .table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+            .table th, .table td { border: 1px solid #000; padding: 8px; text-align: right; }
+            .table th { background-color: #f8f9fa; font-weight: bold; }
+            .total { font-weight: bold; font-size: 18px; margin-top: 15px; text-align: left; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #000; }
+            .footer-note { text-align: center; margin-top: 15px; font-size: 12px; color: #777; }
+            
+            @media print {
+              body { padding: 0; }
+              .waybill { border: 2px dashed #000; max-width: 100%; margin-bottom: 20px; }
+              .waybill:nth-child(3n) { margin-bottom: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          ${selectedOrders.map(order => {
+            const serial = String(orders.length - orders.findIndex(o => o.id === order.id)).padStart(4, '0');
+            return `
+              <div class="waybill">
+                <div class="header">
+                  <div class="title">${tenant?.name || 'ميتش'} - بوليصة شحن</div>
+                  <div class="order-number">طلب رقم: ${tenant?.name || 'ميتش'} #${serial}</div>
+                </div>
+                
+                <div class="info-section">
+                  <div>
+                    <div class="info-group"><span class="info-label">اسم العميل:</span> <span>${order.customers?.name || '-'}</span></div>
+                    <div class="info-group"><span class="info-label">رقم الهاتف:</span> <span><bdi>${order.customers?.phone || '-'}</bdi></span></div>
+                  </div>
+                  <div>
+                    <div class="info-group"><span class="info-label">المحافظة:</span> <span>${order.customers?.city || '-'}</span></div>
+                    <div class="info-group"><span class="info-label">العنوان:</span> <span>${order.customers?.address || '-'}</span></div>
+                  </div>
+                </div>
+                
+                <div class="info-section" style="background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 15px;">
+                  <div>
+                    <div class="info-group"><span class="info-label">الحالة:</span> <span>${getStatusText(order.status)}</span></div>
+                    <div class="info-group"><span class="info-label">حالة الدفع:</span> <span>${getPaymentStatusText(order.payment_status)}</span></div>
+                    ${order.notes ? `<div class="info-group" style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px;"><span class="info-label">ملاحظات:</span> <span>${order.notes}</span></div>` : ''}
+                  </div>
+                  <div>
+                    <div class="info-group"><span class="info-label">شركة الشحن:</span> <span>${Array.isArray(order.shipments) ? order.shipments[0]?.courier || '-' : order.shipments?.courier || '-'}</span></div>
+                    <div class="info-group"><span class="info-label">رقم التتبع:</span> <span dir="ltr">${Array.isArray(order.shipments) ? order.shipments[0]?.tracking_number || '-' : order.shipments?.tracking_number || '-'}</span></div>
+                  </div>
+                </div>
+                
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>المنتج</th>
+                      <th>الكمية</th>
+                      <th>السعر</th>
+                      <th>الإجمالي</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${(order.order_items || []).map((item: any) => `
+                      <tr>
+                        <td>${item.product_variants?.products?.name || 'منتج غير معروف'} - ${item.product_variants?.size || ''}</td>
+                        <td>${item.quantity}</td>
+                        <td>${item.unit_price} ج.م</td>
+                        <td>${(Number(item.quantity) * Number(item.unit_price)).toLocaleString()} ج.م</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+                
+                <div class="total">
+                  إجمالي المطلوب تحصيله: ${Number(order.total_amount).toLocaleString()} ج.م
+                </div>
+                
+                <div class="footer-note">
+                  شكراً لتعاملكم معنا
+                </div>
+              </div>
+            `;
+          }).join('')}
+          <script>
+            window.onload = function() { window.print(); window.setTimeout(function() { window.close(); }, 500); }
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
+  const isAllSelected = filteredOrders.length > 0 && selectedOrderIds.length === filteredOrders.length;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">إدارة الطلبات</h1>
+          <p className="text-sm text-gray-500 mt-1">تابع طلبات عملائك وقم بإدارتها بسهولة</p>
+        </div>
+        
+        <Button onClick={() => setIsOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+          <Plus className="w-4 h-4 ml-2" />
+          إضافة طلب
+        </Button>
+
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+          <DialogContent className="sm:max-w-[900px] border-0 shadow-2xl" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-indigo-700 dark:text-indigo-400 border-b pb-4">إضافة طلب جديد</DialogTitle>
+              <DialogDescription className="text-gray-500 mt-2">
+                أدخل كافة بيانات العميل وتفاصيل الطلب.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleAddOrder} className="mt-4 space-y-6">
+              <div className="grid md:grid-cols-2 gap-6">
+                
+                {/* Customer Details */}
+                <div className="space-y-4 bg-gray-50 p-4 rounded-lg border">
+                  <h3 className="font-bold text-lg text-gray-800 border-b pb-2 flex items-center gap-2">
+                    👤 بيانات العميل
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="customerName">الاسم بالكامل</Label>
+                      <Input id="customerName" value={customerName} onChange={(e) => setCustomerName(e.target.value)} required placeholder="مثال: أحمد محمد" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="customerPhone">رقم الهاتف</Label>
+                      <Input id="customerPhone" dir="ltr" className="text-right" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} required placeholder="01xxxxxxxxx" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="customerCity">المحافظة / المدينة</Label>
+                      <Input id="customerCity" value={customerCity} onChange={(e) => setCustomerCity(e.target.value)} required placeholder="مثال: القاهرة" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="customerAddress">العنوان بالتفصيل</Label>
+                      <Input id="customerAddress" value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} required placeholder="اسم الشارع، رقم العمارة، رقم الشقة" />
+                    </div>
+                  </div>
+                  <div className="grid gap-2 mt-2">
+                    <Label htmlFor="orderNotes">ملاحظات (اختياري)</Label>
+                    <Textarea id="orderNotes" value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} placeholder="اكتب أي ملاحظات للطلب هنا..." className="resize-none h-10 min-h-[40px]" />
+                  </div>
+                </div>
+
+                {/* Order Details */}
+                <div className="space-y-4 bg-indigo-50/50 dark:bg-indigo-500/5 p-4 rounded-lg border border-indigo-100 dark:border-indigo-500/10">
+                  <h3 className="font-semibold text-base text-indigo-800 dark:text-indigo-300 border-b border-indigo-200 dark:border-indigo-500/20 pb-2 flex items-center gap-2">
+                    📦 المنتجات المطلوبة
+                  </h3>
+                  
+                  <div className="hidden md:flex gap-2 px-3 pb-1 text-xs font-bold text-gray-500">
+                    <div className="flex-1">المنتج</div>
+                    <div className="w-28 text-center">السعر (ج.م)</div>
+                    <div className="w-20 text-center">الكمية</div>
+                    {orderItems.length > 1 && <div className="w-8"></div>}
+                  </div>
+
+                  <div className="space-y-2">
+                    {orderItems.map((item, index) => (
+                      <div key={index} className="flex flex-col md:flex-row gap-2 items-start md:items-center bg-gray-50/80 hover:bg-gray-100 transition-colors p-3 rounded-lg border border-gray-100 relative w-full group">
+                        <div className="flex-1 w-full min-w-0">
+                          <ProductSelect
+                            value={item.variantId}
+                            onChange={(val) => handleOrderItemChange(index, "variantId", val)}
+                            options={allVariants}
+                          />
+                        </div>
+                        <div className="flex w-full md:w-auto gap-2">
+                          <div className="w-full md:w-28">
+                            <Input 
+                              type="number" 
+                              min="0" 
+                              value={item.unitPrice} 
+                              onChange={(e) => handleOrderItemChange(index, "unitPrice", e.target.value)} 
+                              onFocus={(e) => e.target.select()}
+                              required 
+                              placeholder="السعر"
+                              className="h-10 px-2 bg-white text-center font-semibold text-gray-900 border-gray-200"
+                            />
+                          </div>
+                          <div className="w-full md:w-20">
+                            <Input 
+                              type="number" 
+                              min="1" 
+                              value={item.quantity} 
+                              onChange={(e) => handleOrderItemChange(index, "quantity", e.target.value)} 
+                              onFocus={(e) => e.target.select()}
+                              required 
+                              placeholder="الكمية"
+                              className="h-10 px-2 bg-white text-center font-bold text-indigo-700 border-gray-200"
+                            />
+                          </div>
+                          
+                          {orderItems.length > 1 && (
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => removeOrderItem(index)}
+                              className="h-10 w-8 text-red-500 hover:text-white hover:bg-red-500 rounded-md transition-colors shrink-0"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={addOrderItem}
+                    className="w-full border-dashed border-2 border-indigo-300 text-indigo-700 hover:bg-indigo-100 bg-white"
+                  >
+                    <Plus className="w-4 h-4 ml-2" />
+                    إضافة منتج آخر
+                  </Button>
+                  
+                  <div className="pt-4 mt-4 border-t border-blue-200 space-y-4">
+                    <h3 className="font-bold text-lg text-blue-800 flex items-center gap-2">
+                      💰 التفاصيل المالية
+                    </h3>
+                    <div className="grid gap-2">
+                      <Label htmlFor="shippingFee">مصاريف الشحن (ج.م)</Label>
+                      <Input 
+                        id="shippingFee" 
+                        type="number" 
+                        min="0"
+                        value={shippingFee} 
+                        onChange={(e) => setShippingFee(e.target.value)} 
+                        onFocus={(e) => e.target.select()}
+                        className="h-10 text-lg bg-white"
+                      />
+                    </div>
+                    <div className="grid gap-2 pt-2">
+                      <Label htmlFor="totalAmount">الإجمالي (شامل الشحن)</Label>
+                      <div className="h-10 px-3 py-2 bg-white rounded-md border border-gray-200 text-lg font-black text-blue-700 flex items-center justify-end" dir="ltr">
+                        {finalTotalAmount.toLocaleString()} ج.م
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+              <DialogFooter className="flex gap-2 sm:justify-end">
+                <Button type="button" variant="outline" onClick={() => setIsOpen(false)} disabled={isSubmitting}>
+                  إلغاء
+                </Button>
+                <Button type="submit" disabled={isSubmitting} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                  {isSubmitting ? "جاري الإضافة..." : "حفظ الطلب"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex gap-2 bg-gray-100 p-1 rounded-lg w-max">
+          <button 
+            onClick={() => setActiveTab("active")}
+            className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${activeTab === "active" ? "bg-white text-blue-600 shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
+          >
+            الطلبات النشطة
+          </button>
+          <button 
+            onClick={() => setActiveTab("deleted")}
+            className={`px-4 py-2 rounded-md text-sm font-bold transition-colors ${activeTab === "deleted" ? "bg-white text-red-600 shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
+          >
+            سجل المحذوفات
+          </button>
+        </div>
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
+          <Input 
+            placeholder="ابحث بالاسم، الهاتف، أو رقم الطلب..." 
+            className="pr-9"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {selectedOrderIds.length > 0 && activeTab === "active" && (
+        <div className="bg-indigo-50 border border-indigo-200 text-indigo-800 px-4 py-3 rounded-lg flex items-center justify-between">
+          <div className="font-bold flex items-center gap-2">
+            <span className="bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs">{selectedOrderIds.length}</span>
+            طلب محدد
+          </div>
+          <div className="flex gap-2 items-center">
+            <select
+              className="flex h-9 w-36 rounded-md border border-gray-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
+              value={bulkStatus}
+              onChange={(e) => setBulkStatus(e.target.value)}
+              disabled={isSubmitting}
+            >
+              <option value="">تغيير الحالة...</option>
+              <option value="pending">في المخزن</option>
+              <option value="shipped">في شركة الشحن</option>
+              <option value="delivered">تم التوصيل</option>
+              <option value="returned_inventory">مرتجع دخل المخزن</option>
+              <option value="returned_shipping">مرتجع في شركة الشحن</option>
+              <option value="cancelled">ملغي في شركة الشحن</option>
+            </select>
+
+            <select
+              className="flex h-9 w-36 rounded-md border border-gray-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
+              value={bulkPaymentStatus}
+              onChange={(e) => setBulkPaymentStatus(e.target.value)}
+              disabled={isSubmitting}
+            >
+              <option value="">تغيير الدفع...</option>
+              <option value="paid">✅ مدفوع</option>
+              <option value="unpaid">❌ غير مدفوع</option>
+              <option value="partial">⏳ مدفوع جزئياً</option>
+              <option value="refunded">🔄 مسترد</option>
+            </select>
+
+            <Button 
+              size="sm" 
+              onClick={handleBulkApply} 
+              disabled={isSubmitting || (!bulkStatus && !bulkPaymentStatus)} 
+              className="bg-indigo-600 hover:bg-indigo-700 h-9"
+            >
+              تطبيق
+            </Button>
+
+            <Button variant="outline" size="sm" className="bg-white hover:bg-gray-50 text-gray-700" onClick={handlePrintMultipleWaybills} disabled={isSubmitting}>
+              <Printer className="w-4 h-4 ml-2" />
+              طباعة بوليصات
+            </Button>
+
+            <Button variant="outline" size="sm" className="bg-white hover:bg-gray-50" onClick={() => setSelectedOrderIds([])} disabled={isSubmitting}>
+              إلغاء التحديد
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white dark:bg-[#1E293B] rounded-xl border border-gray-100 dark:border-white/[0.06]">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-12 text-center">
+                <input 
+                  type="checkbox" 
+                  className="w-4 h-4 rounded border-gray-300 accent-indigo-600 cursor-pointer" 
+                  checked={isAllSelected} 
+                  onChange={(e) => handleSelectAll(e.target.checked)} 
+                />
+              </TableHead>
+              <TableHead className="text-right">رقم الطلب</TableHead>
+              <TableHead className="text-right">العميل</TableHead>
+              <TableHead className="text-right">الإجمالي (ج.م)</TableHead>
+              <TableHead className="text-right">الحالة</TableHead>
+              <TableHead className="text-right">حالة الدفع</TableHead>
+              <TableHead className="text-right">شركة الشحن</TableHead>
+              <TableHead className="text-right">رقم التتبع</TableHead>
+              <TableHead className="text-right" colSpan={activeTab === "active" ? 1 : 2}>ملاحظات</TableHead>
+              <TableHead className="text-left"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center h-24">
+                  جاري التحميل...
+                </TableCell>
+              </TableRow>
+            ) : filteredOrders.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center h-24">
+                  لا يوجد طلبات حالياً
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredOrders.map((order) => {
+                const shipment = Array.isArray(order.shipments) ? order.shipments[0] : order.shipments || {};
+                const isExpanded = expandedOrderId === order.id;
+
+                return (
+                  <React.Fragment key={order.id}>
+                    <TableRow className={isExpanded ? "bg-indigo-50/40" : "hover:bg-gray-50/50"}>
+                      <TableCell className="text-center">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 rounded border-gray-300 accent-blue-600 cursor-pointer" 
+                          checked={selectedOrderIds.includes(order.id)} 
+                          onChange={(e) => handleSelectOne(order.id, e.target.checked)} 
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium text-xs font-mono" dir="ltr">
+                        Mitch #{String(orders.length - orders.findIndex(o => o.id === order.id)).padStart(4, '0')}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-gray-800">{order.customers?.name || "-"}</span>
+                          <span className="text-xs text-gray-500 font-mono mt-0.5">{order.customers?.phone || ""}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-bold">{Number(order.total_amount).toLocaleString()}</TableCell>
+
+                      {isExpanded ? (
+                        <>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <select
+                                className="flex h-8 w-32 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                value={newStatus}
+                                onChange={(e) => setNewStatus(e.target.value)}
+                              >
+                                <option value="pending">في المخزن</option>
+                                <option value="shipped">في شركة الشحن</option>
+                                <option value="delivered">تم التوصيل</option>
+                                <option value="returned_inventory">مرتجع دخل المخزن</option>
+                                <option value="returned_shipping">مرتجع في شركة الشحن</option>
+                                <option value="cancelled">ملغي في شركة الشحن</option>
+                              </select>
+
+                              {!["pending", "returned_inventory", "shipped", "returned_shipping", "cancelled", "delivered"].includes(newStatus) && (
+                                <select
+                                  className={`flex h-7 w-32 rounded-md border px-1 py-0 text-[10px] focus:outline-none ${newStockLocation === "inventory" ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-green-50 text-green-700 border-green-200"}`}
+                                  value={newStockLocation}
+                                  onChange={(e) => setNewStockLocation(e.target.value as "inventory" | "shipping")}
+                                >
+                                  <option value="shipping">🚚 في شركة الشحن</option>
+                                  <option value="inventory">📦 في المخزن</option>
+                                </select>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <select
+                                className="flex h-8 w-28 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                value={newPaymentStatus}
+                                onChange={(e) => setNewPaymentStatus(e.target.value)}
+                              >
+                                <option value="unpaid">❌ غير مدفوع</option>
+                                <option value="paid">✅ مدفوع</option>
+                                <option value="partial">⏳ مدفوع جزئياً</option>
+                                <option value="refunded">🔄 مسترد</option>
+                              </select>
+                          </TableCell>
+                          <TableCell>
+                            <Input value={newCourier} onChange={(e) => setNewCourier(e.target.value)} placeholder="شركة الشحن" className="h-8 w-24 text-xs px-2" />
+                          </TableCell>
+                          <TableCell dir="ltr" className="text-right">
+                            <Input value={newTracking} onChange={(e) => setNewTracking(e.target.value)} placeholder="رقم التتبع" className="h-8 w-28 text-xs font-mono px-2" />
+                          </TableCell>
+                          <TableCell className="text-right" colSpan={activeTab === "active" ? 1 : 2}>
+                            {newPaymentStatus === "partial" && (
+                              <Input value={newNotes} onChange={(e) => setNewNotes(e.target.value)} placeholder="ملاحظات الدفع الجزئي..." className="h-8 w-32 text-xs px-2" />
+                            )}
+                          </TableCell>
+                          <TableCell className="text-left">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button size="sm" onClick={handleUpdateStatus} disabled={isSubmitting} className="h-8 text-xs px-2 bg-indigo-600 hover:bg-indigo-700">
+                                {isSubmitting ? "..." : "حفظ"}
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => setExpandedOrderId(null)} className="h-8 text-xs px-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100">
+                                إلغاء
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </>
+                      ) : (
+                        <>
+                          <TableCell>{getStatusBadge(order.status)}</TableCell>
+                          <TableCell>{getPaymentStatusBadge(order.payment_status)}</TableCell>
+                          <TableCell>{shipment.courier || "-"}</TableCell>
+                          <TableCell dir="ltr" className="text-right">
+                            {shipment.tracking_number ? (
+                              <span className="font-mono text-xs bg-gray-50 px-2 py-1 rounded border">
+                                {shipment.tracking_number}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-sm">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-gray-500 max-w-[120px] truncate" colSpan={activeTab === "active" ? 1 : 2}>
+                            {order.payment_status === "partial" && order.notes ? order.notes : ""}
+                          </TableCell>
+                          <TableCell className="text-left">
+                            <div className="flex items-center justify-end gap-2">
+                              {activeTab === "active" ? (
+                                <>
+                                  <Button variant="outline" size="sm" onClick={() => handleOpenStatus(order)} className="h-8">
+                                    تحديث الحالة
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handlePrintWaybill(order)} className="text-gray-600 h-8 w-8 hover:bg-gray-100" title="طباعة بوليصة">
+                                    <Printer className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handleOpenDetails(order)} className="text-indigo-600 h-8 w-8 hover:bg-indigo-50" title="التفاصيل">
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" onClick={() => handleDeleteOrder(order)} className="text-red-500 h-8 w-8 hover:bg-red-50 hover:text-red-600" title="حذف">
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Button variant="ghost" size="icon" onClick={() => handleOpenDetails(order)} className="text-indigo-600 h-8 w-8 hover:bg-indigo-50">
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="outline" size="sm" onClick={() => handleRestoreOrder(order)} className="h-8 border-green-500 text-green-600 hover:bg-green-50">
+                                    استعادة
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </TableCell>
+                        </>
+                      )}
+                    </TableRow>
+                  </React.Fragment>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="sm:max-w-[900px] w-[95vw]" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-indigo-900 border-b pb-4">تفاصيل الطلب</DialogTitle>
+            <DialogDescription dir="ltr" className="text-right text-lg font-mono text-indigo-600 mt-2">
+              {selectedOrder ? `Mitch #${String(orders.length - orders.findIndex(o => o.id === selectedOrder.id)).padStart(4, '0')}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedOrder && (
+            <div className="grid md:grid-cols-2 gap-6 mt-2">
+              
+              {/* Right Column (in RTL): Customer & Shipping Info */}
+              <div className="space-y-6">
+                <div className="bg-gray-50 p-5 rounded-xl border border-gray-100 shadow-sm">
+                  <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2 text-lg">
+                    👤 بيانات العميل
+                  </h4>
+                  <div className="text-sm space-y-3">
+                    <div className="flex justify-between border-b pb-2"><span className="text-gray-500">الاسم:</span> <span className="font-medium">{selectedOrder.customers?.name}</span></div>
+                    <div className="flex justify-between border-b pb-2"><span className="text-gray-500">الهاتف:</span> <span className="font-medium font-mono" dir="ltr">{selectedOrder.customers?.phone}</span></div>
+                    <div className="flex justify-between border-b pb-2"><span className="text-gray-500">المدينة:</span> <span className="font-medium">{selectedOrder.customers?.city}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">العنوان:</span> <span className="font-medium text-left max-w-[200px]">{selectedOrder.customers?.address}</span></div>
+                  </div>
+                </div>
+                
+                <div className="bg-indigo-50/70 p-5 rounded-xl border border-indigo-100 shadow-sm">
+                  <h4 className="font-bold text-indigo-800 mb-4 flex items-center gap-2 text-lg">
+                    <Truck className="w-5 h-5" />
+                    حالة الطلب والشحن
+                  </h4>
+                  <div className="text-sm space-y-3">
+                    <div className="flex justify-between items-center border-b border-indigo-100 pb-2"><span className="text-gray-500">الحالة:</span> <span>{getStatusBadge(selectedOrder.status)}</span></div>
+                    <div className="flex justify-between items-center border-b border-indigo-100 pb-2"><span className="text-gray-500">حالة الدفع:</span> <span>{getPaymentStatusBadge(selectedOrder.payment_status)}</span></div>
+                    <div className="flex justify-between items-center border-b border-indigo-100 pb-2">
+                      <span className="text-gray-500">شركة الشحن:</span> 
+                      <span className="font-medium bg-white px-2 py-1 rounded border">{Array.isArray(selectedOrder.shipments) ? selectedOrder.shipments[0]?.courier || "-" : selectedOrder.shipments?.courier || "-"}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-500">رقم التتبع:</span> 
+                      <span className="font-mono text-left bg-white px-2 py-1 rounded border" dir="ltr">{Array.isArray(selectedOrder.shipments) ? selectedOrder.shipments[0]?.tracking_number || "-" : selectedOrder.shipments?.tracking_number || "-"}</span>
+                    </div>
+                    {selectedOrder.notes && (
+                      <div className="mt-3 pt-3 border-t border-indigo-200">
+                        <span className="text-gray-500 block mb-2 font-medium">ملاحظات الإدارة:</span>
+                        <p className="bg-white p-3 rounded-lg text-gray-700 text-sm leading-relaxed border shadow-inner">{selectedOrder.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Left Column (in RTL): Products & Total */}
+              <div className="space-y-6 flex flex-col">
+                <div className="flex-1 bg-white p-5 rounded-xl border border-gray-200 shadow-sm flex flex-col">
+                  <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2 text-lg">
+                    📦 المنتجات المطلوبة
+                  </h4>
+                  <div className="border rounded-lg divide-y bg-gray-50/50 flex-1 overflow-y-auto max-h-[300px]">
+                    {selectedOrder.order_items?.map((item: any) => (
+                      <div key={item.id} className="flex justify-between items-center p-4 hover:bg-white transition-colors">
+                        <div>
+                          <p className="font-bold text-gray-800">{item.product_variants?.products?.name}</p>
+                          <p className="text-gray-500 text-xs mt-1 bg-gray-200 inline-block px-2 py-0.5 rounded">{item.product_variants?.size}</p>
+                        </div>
+                        <div className="text-left">
+                          <p className="text-gray-500 text-xs">{item.quantity} × {item.unit_price} ج.م</p>
+                          <p className="font-bold text-indigo-600 mt-1">{Number(item.quantity) * Number(item.unit_price)} ج.م</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="flex justify-between items-center bg-gradient-to-l from-indigo-600 to-indigo-800 text-white p-5 rounded-xl font-bold shadow-lg mt-auto">
+                  <span className="text-lg">إجمالي الطلب:</span>
+                  <span className="text-2xl">{Number(selectedOrder.total_amount).toLocaleString()} ج.م</span>
+                </div>
+              </div>
+
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      {/* Confirm Dialog */}
+      <Dialog open={confirmDialog.isOpen} onOpenChange={(open) => !open && setConfirmDialog(prev => ({ ...prev, isOpen: false }))}>
+        <DialogContent className="sm:max-w-[400px]" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">{confirmDialog.title}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-700 font-medium">{confirmDialog.message}</p>
+          </div>
+          <DialogFooter className="flex gap-2 sm:justify-start">
+            <Button variant="outline" onClick={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}>
+              إلغاء
+            </Button>
+            <Button 
+              className="bg-indigo-600 hover:bg-indigo-700 text-white" 
+              onClick={() => {
+                confirmDialog.onConfirm();
+                setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+              }}
+            >
+              تأكيد
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

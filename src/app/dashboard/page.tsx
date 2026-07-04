@@ -1,0 +1,326 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { DollarSign, Package, ShoppingCart, Truck, AlertTriangle, Wallet } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { createClient } from "@/utils/supabase/client";
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
+
+export default function DashboardPage() {
+  const [lowStockVariants, setLowStockVariants] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState({
+    totalSales: 0,
+    pendingOrders: 0,
+    inventoryValue: 0,
+    supplierDues: 0,
+    vaultProfit: 0,
+    totalOrdersCount: 0,
+  });
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [tenant, setTenant] = useState<any>(null);
+  const [chartData, setChartData] = useState<any[]>([]);
+  
+  const supabase = createClient();
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    // Fetch tenant
+    const { data: tenantData } = await supabase.from("tenants").select("*").single();
+    if (tenantData) setTenant(tenantData);
+
+    // 1. Low Stock
+    const { data: lowStockData } = await supabase
+      .from("product_variants")
+      .select(`*, products ( name )`);
+      
+    if (lowStockData) {
+      const lowStock = lowStockData.filter(v => v.stock_quantity <= (v.low_stock_threshold || 5));
+      setLowStockVariants(lowStock);
+      
+      // Calculate Inventory Value
+      const invValue = lowStockData.reduce((acc, curr) => acc + (Number(curr.stock_quantity) * Number(curr.normal_cost)), 0);
+      setMetrics(prev => ({ ...prev, inventoryValue: invValue }));
+    }
+
+    // 2. Sales & Pending Orders
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    
+    // Total Sales this month (last 30 days for chart)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const { data: salesData } = await supabase
+      .from('orders')
+      .select('total_amount, created_at')
+      .gte('created_at', thirtyDaysAgo.toISOString())
+      .not('status', 'in', '("cancelled","returned_inventory","returned_shipping")');
+      
+    if (salesData) {
+      // Calculate total for this month only
+      const thisMonthSales = salesData.filter(s => new Date(s.created_at) >= new Date(startOfMonth));
+      const sales = thisMonthSales.reduce((acc, curr) => acc + Number(curr.total_amount), 0);
+      setMetrics(prev => ({ ...prev, totalSales: sales }));
+
+      // Process chart data (group by date)
+      const dailySales: Record<string, number> = {};
+      salesData.forEach(order => {
+        const date = new Date(order.created_at).toLocaleDateString('en-CA');
+        if (!dailySales[date]) dailySales[date] = 0;
+        dailySales[date] += Number(order.total_amount);
+      });
+
+      const formattedChartData = Object.keys(dailySales)
+        .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+        .map(date => ({ date, amount: dailySales[date] }));
+        
+      setChartData(formattedChartData);
+    }
+
+    // Pending Orders
+    const { count: pendingCount } = await supabase
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending');
+      
+    if (pendingCount !== null) {
+      setMetrics(prev => ({ ...prev, pendingOrders: pendingCount }));
+    }
+
+    // Total Orders Count for serial numbering
+    const { count: totalOrdersCount } = await supabase
+      .from('orders')
+      .select('*', { count: 'exact', head: true });
+      
+    setMetrics(prev => ({ ...prev, totalOrdersCount: totalOrdersCount || 0 }));
+
+    // Recent Orders
+    const { data: recentOrdersData } = await supabase
+      .from('orders')
+      .select(`id, total_amount, created_at, customers ( name )`)
+      .order('created_at', { ascending: false })
+      .limit(5);
+      
+    if (recentOrdersData) {
+      setRecentOrders(recentOrdersData);
+    }
+
+    // 3. Supplier Dues
+    const { data: suppliersData } = await supabase
+      .from('suppliers')
+      .select('balance')
+      .gt('balance', 0);
+      
+    if (suppliersData) {
+      const dues = suppliersData.reduce((acc, curr) => acc + Number(curr.balance), 0);
+      setMetrics(prev => ({ ...prev, supplierDues: dues }));
+    }
+
+    // 4. Vault Profit (Net Profit of Paid Orders)
+    const { data: paidOrders } = await supabase
+      .from('orders')
+      .select(`id, order_items ( quantity, unit_price, product_variants ( normal_cost ) )`)
+      .eq('payment_status', 'paid');
+      
+    if (paidOrders) {
+      let vaultProfit = 0;
+      paidOrders.forEach(order => {
+        let orderRevenue = 0;
+        let totalCost = 0;
+        order.order_items?.forEach((item: any) => {
+           const qty = Number(item.quantity) || 0;
+           const price = Number(item.unit_price) || 0;
+           const cost = Number(item.product_variants?.normal_cost) || 0;
+           orderRevenue += qty * price;
+           totalCost += qty * cost;
+        });
+        vaultProfit += (orderRevenue - totalCost);
+      });
+      setMetrics(prev => ({ ...prev, vaultProfit }));
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Page Title */}
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">نظرة عامة</h2>
+        <p className="text-sm text-gray-500 mt-1">ملخص أداء متجرك لهذا الشهر</p>
+      </div>
+
+      {/* ─── Metric Cards ─── */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className="bg-white dark:bg-[#1E293B] rounded-xl border border-gray-100 dark:border-white/[0.06] p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">المبيعات (الشهر)</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
+              <DollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-gray-900 dark:text-white" dir="ltr">
+            {metrics.totalSales.toLocaleString()} <span className="text-sm font-normal text-gray-400">ج.م</span>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">من أول الشهر الحالي</p>
+        </div>
+
+        <div className="bg-white dark:bg-[#1E293B] rounded-xl border border-gray-100 dark:border-white/[0.06] p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">الخزنة (الأرباح)</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center">
+              <Wallet className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-gray-900 dark:text-white" dir="ltr">
+            {metrics.vaultProfit.toLocaleString()} <span className="text-sm font-normal text-gray-400">ج.م</span>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">من الطلبات المدفوعة</p>
+        </div>
+        
+        <div className="bg-white dark:bg-[#1E293B] rounded-xl border border-gray-100 dark:border-white/[0.06] p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">الطلبات المعلقة</span>
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
+              <ShoppingCart className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-gray-900 dark:text-white" dir="ltr">
+            {metrics.pendingOrders}
+          </div>
+          <p className="text-xs text-gray-400 mt-1">بانتظار التأكيد أو الشحن</p>
+        </div>
+
+        <div className="bg-white dark:bg-[#1E293B] rounded-xl border border-gray-100 dark:border-white/[0.06] p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">قيمة المخزون</span>
+            <div className="w-8 h-8 rounded-lg bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center">
+              <Package className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-gray-900 dark:text-white" dir="ltr">
+            {metrics.inventoryValue.toLocaleString()} <span className="text-sm font-normal text-gray-400">ج.م</span>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">بناءً على سعر الشراء</p>
+        </div>
+
+        <div className="bg-white dark:bg-[#1E293B] rounded-xl border border-gray-100 dark:border-white/[0.06] p-5">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">مستحقات الموردين</span>
+            <div className="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-500/10 flex items-center justify-center">
+              <Truck className="h-4 w-4 text-red-600 dark:text-red-400" />
+            </div>
+          </div>
+          <div className="text-2xl font-bold text-red-600 dark:text-red-400" dir="ltr">
+            {metrics.supplierDues.toLocaleString()} <span className="text-sm font-normal">ج.م</span>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">إجمالي الديون</p>
+        </div>
+      </div>
+
+      {/* ─── Low Stock Alert ─── */}
+      {lowStockVariants.length > 0 && (
+        <div className="bg-white dark:bg-[#1E293B] rounded-xl border border-red-200 dark:border-red-500/20 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-4 h-4 text-red-500" />
+            <h3 className="text-sm font-semibold text-red-700 dark:text-red-400">تنبيهات انخفاض المخزون</h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {lowStockVariants.map((v) => (
+              <Badge key={v.id} variant="destructive" className="px-3 py-1 text-xs bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20">
+                {v.products?.name} - {v.size} ({v.color}) | متبقي: {v.stock_quantity}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Charts & Recent Orders ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-7 gap-6">
+        {/* Sales Chart */}
+        <div className="lg:col-span-4 bg-white dark:bg-[#1E293B] rounded-xl border border-gray-100 dark:border-white/[0.06] p-5">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">المبيعات الأخيرة (30 يوم)</h3>
+          <div className="h-[280px] w-full" dir="ltr">
+            {chartData.length === 0 ? (
+              <div className="h-full flex items-center justify-center rounded-lg border border-dashed border-gray-200 dark:border-white/10">
+                <span className="text-gray-400 text-sm">لا توجد بيانات كافية</span>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F3F4F6" />
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="#9CA3AF" 
+                    fontSize={11} 
+                    tickLine={false} 
+                    axisLine={false}
+                    tickFormatter={(value) => {
+                      const d = new Date(value);
+                      return `${d.getDate()}/${d.getMonth() + 1}`;
+                    }}
+                  />
+                  <YAxis 
+                    stroke="#9CA3AF" 
+                    fontSize={11} 
+                    tickLine={false} 
+                    axisLine={false} 
+                    tickFormatter={(value) => `${value.toLocaleString()}`}
+                  />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '10px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)', fontSize: '13px' }}
+                    formatter={(value: any) => [`${Number(value).toLocaleString()} ج.م`, 'المبيعات']}
+                    labelFormatter={(label) => {
+                      const d = new Date(label);
+                      return d.toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="amount" 
+                    stroke="#4F46E5" 
+                    strokeWidth={2.5}
+                    dot={false}
+                    activeDot={{ r: 5, strokeWidth: 0, fill: '#4F46E5' }}
+                    animationDuration={1200}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* Recent Orders */}
+        <div className="lg:col-span-3 bg-white dark:bg-[#1E293B] rounded-xl border border-gray-100 dark:border-white/[0.06] p-5">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">أحدث الطلبات</h3>
+          {recentOrders.length === 0 ? (
+            <div className="text-center py-12 text-gray-400 text-sm">
+              لا توجد طلبات مسجلة بعد
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {recentOrders.map((order, i) => (
+                <div key={order.id} className="flex items-center gap-3 py-2">
+                  <div className="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center shrink-0">
+                    <ShoppingCart className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                      {order.customers?.name || "عميل غير معروف"}
+                    </p>
+                    <p className="text-xs text-gray-400 font-mono">
+                      {tenant?.name || 'ميتش'} #{String(metrics.totalOrdersCount - i).padStart(4, '0')}
+                    </p>
+                  </div>
+                  <div className="font-semibold text-sm text-gray-900 dark:text-white whitespace-nowrap" dir="ltr">
+                    +{Number(order.total_amount).toLocaleString()} ج.م
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
