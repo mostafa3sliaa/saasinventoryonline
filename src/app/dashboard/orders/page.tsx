@@ -132,6 +132,48 @@ export default function OrdersPage() {
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkPaymentStatus, setBulkPaymentStatus] = useState("");
   const [newNotes, setNewNotes] = useState("");
+    const [shippingLoss, setShippingLoss] = useState("");
+  const [partialModalOpen, setPartialModalOpen] = useState(false);
+  const [partialOrder, setPartialOrder] = useState<any>(null);
+  const [partialItems, setPartialItems] = useState<any[]>([]);
+  const [partialNewTotal, setPartialNewTotal] = useState("");
+  
+  // Partial Delivery Submit Handler
+  const handlePartialDeliverySubmit = async () => {
+    if (!partialOrder || !partialNewTotal) return;
+    setIsSubmitting(true);
+    try {
+      // 1. Return stock for qty_returned
+      for (const item of partialItems) {
+        if (item.qty_returned > 0) {
+          const { data: variant } = await supabase.from("product_variants").select("stock_quantity").eq("id", item.product_variant_id).single();
+          if (variant) {
+            await supabase.from("product_variants").update({ stock_quantity: Number(variant.stock_quantity) + Number(item.qty_returned) }).eq("id", item.product_variant_id);
+          }
+        }
+      }
+      
+      // 2. Update order (status: delivered, total_amount: partialNewTotal, payment_status: paid)
+      // Save notes indicating it was a partial delivery
+      const notes = partialOrder.notes ? partialOrder.notes + "\n[استلام جزئي]" : "[استلام جزئي]";
+      await supabase.from("orders").update({ 
+        status: "delivered", 
+        payment_status: "paid", 
+        total_amount: partialNewTotal,
+        notes: notes
+      }).eq("id", partialOrder.id);
+      
+      toast.success("تم تأكيد الاستلام الجزئي بنجاح!");
+      setPartialModalOpen(false);
+      setExpandedOrderId(null);
+      fetchOrders();
+    } catch (e) {
+      console.error(e);
+      toast.error("حدث خطأ");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
   const [confirmDialog, setConfirmDialog] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void }>({ isOpen: false, title: "", message: "", onConfirm: () => {} });
 
   const handleOpenStatus = (order: any) => {
@@ -139,6 +181,7 @@ export default function OrdersPage() {
       setExpandedOrderId(null);
       return;
     }
+    setShippingLoss("");
     setSelectedOrder(order);
     setNewStatus(order.status || "pending");
     setNewPaymentStatus(order.payment_status || "unpaid");
@@ -456,6 +499,18 @@ export default function OrdersPage() {
   const handleUpdateStatus = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrder) return;
+    
+    if (newStatus === "partial") {
+      setPartialOrder(selectedOrder);
+      setPartialItems(selectedOrder.order_items?.map((item: any) => ({
+        ...item,
+        qty_returned: 0
+      })) || []);
+      setPartialNewTotal(selectedOrder.total_amount || "");
+      setPartialModalOpen(true);
+      return;
+    }
+    
     setIsSubmitting(true);
 
     const isStockDeducted = (status: string) => !["returned_inventory", "cancelled"].includes(status);
@@ -489,6 +544,18 @@ export default function OrdersPage() {
     if (newNotes !== undefined) {
       updateObj.notes = newNotes;
     }
+
+    // Shipping loss logic
+    if (["returned_inventory", "cancelled"].includes(newStatus) && shippingLoss && Number(shippingLoss) > 0) {
+      await supabase.from("expenses").insert({
+        amount: Number(shippingLoss),
+        description: `مصاريف شحن مرتجعات لطلب #${selectedOrder.id}`,
+        category: "shipping_loss",
+        date: new Date().toISOString().split('T')[0],
+        tenant_id: tenant?.id
+      });
+    }
+    
     const { error: orderError } = await supabase.from("orders").update(updateObj).eq("id", selectedOrder.id);
     if (orderError) {
       toast.error("حدث خطأ أثناء تحديث الطلب: تأكد من إضافة عمود notes في قاعدة البيانات");
@@ -653,7 +720,7 @@ export default function OrdersPage() {
             <div class="info-section" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">
               <div>
                 <div class="info-group"><span class="info-label">الحالة:</span> <span>${getStatusText(order.status)}</span></div>
-                <div class="info-group"><span class="info-label">حالة الدفع:</span> <span>${getPaymentStatusText(order.payment_status)}</span></div>
+                
                 ${order.notes ? `<div class="info-group" style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px;"><span class="info-label">ملاحظات:</span> <span>${order.notes}</span></div>` : ''}
               </div>
               <div>
@@ -760,7 +827,7 @@ export default function OrdersPage() {
                 <div class="info-section" style="background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 15px;">
                   <div>
                     <div class="info-group"><span class="info-label">الحالة:</span> <span>${getStatusText(order.status)}</span></div>
-                    <div class="info-group"><span class="info-label">حالة الدفع:</span> <span>${getPaymentStatusText(order.payment_status)}</span></div>
+                    
                     ${order.notes ? `<div class="info-group" style="margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px;"><span class="info-label">ملاحظات:</span> <span>${order.notes}</span></div>` : ''}
                   </div>
                   <div>
@@ -1013,33 +1080,7 @@ export default function OrdersPage() {
             طلب محدد
           </div>
           <div className="flex gap-2 items-center">
-            <select
-              className="flex h-9 w-36 rounded-md border border-gray-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
-              value={bulkStatus}
-              onChange={(e) => setBulkStatus(e.target.value)}
-              disabled={isSubmitting}
-            >
-              <option value="">تغيير الحالة...</option>
-              <option value="pending">في المخزن</option>
-              <option value="shipped">في شركة الشحن</option>
-              <option value="delivered">تم التوصيل</option>
-              <option value="returned_inventory">مرتجع دخل المخزن</option>
-              <option value="returned_shipping">مرتجع في شركة الشحن</option>
-              <option value="cancelled">ملغي في شركة الشحن</option>
-            </select>
-
-            <select
-              className="flex h-9 w-36 rounded-md border border-gray-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
-              value={bulkPaymentStatus}
-              onChange={(e) => setBulkPaymentStatus(e.target.value)}
-              disabled={isSubmitting}
-            >
-              <option value="">تغيير الدفع...</option>
-              <option value="paid">✅ مدفوع</option>
-              <option value="unpaid">❌ غير مدفوع</option>
-              <option value="partial">⏳ مدفوع جزئياً</option>
-              <option value="refunded">🔄 مسترد</option>
-            </select>
+            
 
             <Button 
               size="sm" 
@@ -1078,7 +1119,7 @@ export default function OrdersPage() {
               <TableHead className="text-right">العميل</TableHead>
               <TableHead className="text-right">الإجمالي (ج.م)</TableHead>
               <TableHead className="text-right">الحالة</TableHead>
-              <TableHead className="text-right">حالة الدفع</TableHead>
+              
               <TableHead className="text-right">شركة الشحن</TableHead>
               <TableHead className="text-right">رقم التتبع</TableHead>
               <TableHead className="text-right" colSpan={activeTab === "active" ? 1 : 2}>ملاحظات</TableHead>
@@ -1134,12 +1175,12 @@ export default function OrdersPage() {
                                 value={newStatus}
                                 onChange={(e) => setNewStatus(e.target.value)}
                               >
-                                <option value="pending">في المخزن</option>
-                                <option value="shipped">في شركة الشحن</option>
+                                <option value="pending">قيد التجهيز</option>
+                                
                                 <option value="delivered">تم التوصيل</option>
-                                <option value="returned_inventory">مرتجع دخل المخزن</option>
-                                <option value="returned_shipping">مرتجع في شركة الشحن</option>
-                                <option value="cancelled">ملغي في شركة الشحن</option>
+                                <option value="returned_inventory">مرتجع</option>
+                                
+                                
                               </select>
 
                               {!["pending", "returned_inventory", "shipped", "returned_shipping", "cancelled", "delivered"].includes(newStatus) && (
@@ -1154,18 +1195,7 @@ export default function OrdersPage() {
                               )}
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <select
-                                className="flex h-8 w-28 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                value={newPaymentStatus}
-                                onChange={(e) => setNewPaymentStatus(e.target.value)}
-                              >
-                                <option value="unpaid">❌ غير مدفوع</option>
-                                <option value="paid">✅ مدفوع</option>
-                                <option value="partial">⏳ مدفوع جزئياً</option>
-                                <option value="refunded">🔄 مسترد</option>
-                              </select>
-                          </TableCell>
+                          
                           <TableCell>
                             <Input value={newCourier} onChange={(e) => setNewCourier(e.target.value)} placeholder="شركة الشحن" className="h-8 w-24 text-xs px-2" />
                           </TableCell>
@@ -1191,7 +1221,7 @@ export default function OrdersPage() {
                       ) : (
                         <>
                           <TableCell>{getStatusBadge(order.status)}</TableCell>
-                          <TableCell>{getPaymentStatusBadge(order.payment_status)}</TableCell>
+                          
                           <TableCell>{shipment.courier || "-"}</TableCell>
                           <TableCell dir="ltr" className="text-right">
                             {shipment.tracking_number ? (
@@ -1278,7 +1308,7 @@ export default function OrdersPage() {
                   </h4>
                   <div className="text-sm space-y-3">
                     <div className="flex justify-between items-center border-b border-indigo-100 pb-2"><span className="text-gray-500">الحالة:</span> <span>{getStatusBadge(selectedOrder.status)}</span></div>
-                    <div className="flex justify-between items-center border-b border-indigo-100 pb-2"><span className="text-gray-500">حالة الدفع:</span> <span>{getPaymentStatusBadge(selectedOrder.payment_status)}</span></div>
+                    
                     <div className="flex justify-between items-center border-b border-indigo-100 pb-2">
                       <span className="text-gray-500">شركة الشحن:</span> 
                       <span className="font-medium bg-white px-2 py-1 rounded border">{Array.isArray(selectedOrder.shipments) ? selectedOrder.shipments[0]?.courier || "-" : selectedOrder.shipments?.courier || "-"}</span>
@@ -1329,6 +1359,59 @@ export default function OrdersPage() {
           )}
         </DialogContent>
       </Dialog>
+      
+      {/* Partial Delivery Modal */}
+      <Dialog open={partialModalOpen} onOpenChange={setPartialModalOpen}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-orange-600">استلام جزئي للطلب #{partialOrder?.id}</DialogTitle>
+            <DialogDescription>
+              حدد الكميات المرتجعة التي لم يستلمها العميل. سيتم إعادتها للمخزن فوراً واعتبار باقي الطلب (مدفوع) و (مكتمل).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2 border-b pb-4">
+              <Label>المنتجات المرتجعة:</Label>
+              {partialItems.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-2 bg-gray-50 p-2 rounded">
+                  <div className="flex-1 text-sm truncate">منتج (كمية: {item.quantity})</div>
+                  <div className="w-24">
+                    <Input 
+                      type="number" 
+                      min="0" 
+                      max={item.quantity} 
+                      value={item.qty_returned}
+                      onChange={e => {
+                        const newItems = [...partialItems];
+                        newItems[idx].qty_returned = Number(e.target.value);
+                        setPartialItems(newItems);
+                      }}
+                      placeholder="مرتجع"
+                      className="h-8 text-center"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div>
+              <Label className="text-indigo-700 font-bold">الإجمالي الجديد المحصل فعلياً (ج.م)</Label>
+              <Input 
+                type="number" 
+                value={partialNewTotal} 
+                onChange={e => setPartialNewTotal(e.target.value)}
+                className="mt-1 text-lg font-bold"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPartialModalOpen(false)}>إلغاء</Button>
+            <Button className="bg-orange-600 hover:bg-orange-700 text-white" onClick={handlePartialDeliverySubmit} disabled={isSubmitting}>
+              {isSubmitting ? "جاري الحفظ..." : "تأكيد الاستلام الجزئي"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Confirm Dialog */}
       <Dialog open={confirmDialog.isOpen} onOpenChange={(open) => !open && setConfirmDialog(prev => ({ ...prev, isOpen: false }))}>
         <DialogContent className="sm:max-w-[400px]" dir="rtl">
