@@ -520,7 +520,6 @@ export default function OrdersPage() {
           amount: Number(shippingLoss),
           category: "مصروفات",
           description: `خسارة شحن للطلب رقم ${selectedOrder.id.substring(0,6)}`,
-          source: "order",
           transaction_date: new Date().toISOString()
         });
         computedNotes = computedNotes ? `${computedNotes} | خسارة شحن: ${shippingLoss}` : `خسارة شحن: ${shippingLoss}`;
@@ -544,7 +543,6 @@ export default function OrdersPage() {
           amount: Number(newAmountPaid),
           category: "مبيعات",
           description: `تحصيل جزئي للطلب رقم ${selectedOrder.id.substring(0,6)}`,
-          source: "order",
           transaction_date: new Date().toISOString()
         });
         computedNotes = computedNotes ? `${computedNotes} | تحصيل جزئي: ${newAmountPaid}` : `تحصيل جزئي: ${newAmountPaid}`;
