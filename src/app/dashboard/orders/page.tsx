@@ -1136,7 +1136,9 @@ export default function OrdersPage() {
               <TableHead className="text-right p-0">
                 <Select value={statusFilter} onValueChange={(val) => setStatusFilter(val || "all")}>
                   <SelectTrigger className="w-full border-none bg-transparent shadow-none font-bold text-gray-500 hover:text-gray-900 focus:ring-0 text-right px-4">
-                    <SelectValue placeholder="الحالة" />
+                    <SelectValue placeholder="الحالة">
+                      {statusFilter === "all" ? "الحالة" : getStatusText(statusFilter)}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">الحالة</SelectItem>
