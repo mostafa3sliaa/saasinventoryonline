@@ -166,8 +166,7 @@ export default function OrdersPage() {
         notes: notes
       }).eq("id", partialOrder.id);
       
-      const serialPartial = String(orders.length - orders.findIndex(o => o.id === partialOrder.id)).padStart(4, '0');
-      const orderNamePartial = `${tenant?.name || 'ميتش'} #${serialPartial}`;
+      const orderNamePartial = `#${partialOrder.id.substring(0,8)}`;
       logActivity(supabase, tenant?.id, currentUser?.id, "تأكيد استلام جزئي", "order", partialOrder.id, { order_name: orderNamePartial });
       toast.success("تم تأكيد الاستلام الجزئي بنجاح!");
       setPartialModalOpen(false);
@@ -436,9 +435,8 @@ export default function OrdersPage() {
       }
     }
 
-    const newSerial = String(orders.length + 1).padStart(4, '0');
-    const orderNameAdd = `${tenant?.name || 'ميتش'} #${newSerial}`;
-    logActivity(supabase, tenant?.id, currentUser?.id, "إنشاء طلب جديد", "order", order.id, { order_name: orderNameAdd });
+    // orderNameAdd is no longer generated with serials. We'll log the new id instead after insert.
+    logActivity(supabase, tenant?.id, currentUser?.id, "إنشاء طلب جديد", "order", order.id, { order_name: `#${order.id.substring(0,8)}` });
     toast.success("تم إضافة الطلب بنجاح");
     setIsOpen(false);
     fetchOrders();
@@ -582,8 +580,7 @@ export default function OrdersPage() {
       }
     }
     
-    const serialStatus = String(orders.length - orders.findIndex(o => o.id === selectedOrder.id)).padStart(4, '0');
-    const orderNameStatus = `${tenant?.name || 'ميتش'} #${serialStatus}`;
+    const orderNameStatus = `#${selectedOrder.id.substring(0,8)}`;
     logActivity(supabase, tenant?.id, currentUser?.id, `تحديث حالة الطلب إلى: ${getStatusText(dbStatus)}`, "order", selectedOrder.id, { order_name: orderNameStatus });
     setExpandedOrderId(null);
     fetchOrders();
@@ -605,8 +602,7 @@ export default function OrdersPage() {
           toast.error("فشل في حذف الطلب");
           fetchOrders(); // rollback on error
         } else {
-          const serialDel = String(orders.length - orders.findIndex(o => o.id === order.id)).padStart(4, '0');
-          const orderNameDel = `${tenant?.name || 'ميتش'} #${serialDel}`;
+          const orderNameDel = `#${order.id.substring(0,8)}`;
           logActivity(supabase, tenant?.id, currentUser?.id, "نقل الطلب للمحذوفات", "order", order.id, { order_name: orderNameDel });
           toast.success("تم نقل الطلب لسجل المحذوفات");
         }
@@ -630,8 +626,7 @@ export default function OrdersPage() {
           toast.error("فشل في استعادة الطلب: " + error.message);
           fetchOrders(); // rollback on error
         } else {
-          const serialRes = String(orders.length - orders.findIndex(o => o.id === order.id)).padStart(4, '0');
-          const orderNameRes = `${tenant?.name || 'ميتش'} #${serialRes}`;
+          const orderNameRes = `#${order.id.substring(0,8)}`;
           logActivity(supabase, tenant?.id, currentUser?.id, "استعادة الطلب من المحذوفات", "order", order.id, { order_name: orderNameRes });
           toast.success("تم استعادة الطلب بنجاح");
         }
@@ -708,7 +703,7 @@ export default function OrdersPage() {
           <div class="waybill">
             <div class="header">
               <div class="title">${tenant?.name || 'ميتش'} - بوليصة شحن</div>
-              <div class="order-number">طلب رقم: ${tenant?.name || 'ميتش'} #${serial}</div>
+              <div class="order-number">طلب رقم: #${order.id.substring(0,8)}</div>
             </div>
             
             <div class="info-section">
@@ -815,7 +810,7 @@ export default function OrdersPage() {
               <div class="waybill">
                 <div class="header">
                   <div class="title">${tenant?.name || 'ميتش'} - بوليصة شحن</div>
-                  <div class="order-number">طلب رقم: ${tenant?.name || 'ميتش'} #${serial}</div>
+                  <div class="order-number">طلب رقم: #${order.id.substring(0,8)}</div>
                 </div>
                 
                 <div class="info-section">
@@ -1170,7 +1165,7 @@ export default function OrdersPage() {
                         />
                       </TableCell>
                       <TableCell className="font-medium text-xs font-mono" dir="ltr">
-                        Mitch #{String(orders.length - orders.findIndex(o => o.id === order.id)).padStart(4, '0')}
+                        #{order.id.substring(0,8)}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
@@ -1317,7 +1312,7 @@ export default function OrdersPage() {
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-indigo-900 border-b pb-4">تفاصيل الطلب</DialogTitle>
             <DialogDescription dir="ltr" className="text-right text-lg font-mono text-indigo-600 mt-2">
-              {selectedOrder ? `Mitch #${String(orders.length - orders.findIndex(o => o.id === selectedOrder.id)).padStart(4, '0')}` : ""}
+              {selectedOrder ? `#${selectedOrder.id.substring(0,8)}` : ""}
             </DialogDescription>
           </DialogHeader>
           
