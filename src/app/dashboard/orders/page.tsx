@@ -1187,7 +1187,22 @@ export default function OrdersPage() {
                               <select
                                 className="flex h-8 w-32 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
                                 value={newStatus}
-                                onChange={(e) => setNewStatus(e.target.value)}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setNewStatus(val);
+                                  if (val === "partially_delivered") {
+                                    setPartialOrder(order);
+                                    setPartialItems(order.order_items?.map((i: any) => ({
+                                      product_variant_id: i.product_variant_id,
+                                      title: i.product_variants?.products?.name || "منتج",
+                                      qty_returned: 0,
+                                      max: i.quantity,
+                                      unit_price: i.unit_price
+                                    })) || []);
+                                    setPartialNewTotal(order.total_amount?.toString() || "");
+                                    setPartialModalOpen(true);
+                                  }
+                                }}
                               >
                                 <option value="pending">في الانتظار</option>
                                 <option value="shipped">في الشحن</option>
@@ -1204,40 +1219,8 @@ export default function OrdersPage() {
                                   className="h-8 w-32 text-xs px-2 border-red-200 focus-visible:ring-red-500 mt-1" 
                                 />
                               )}
-                              {newStatus === "partially_delivered" && (
-                                <div className="flex flex-col gap-1 mt-1 p-2 bg-teal-50 border border-teal-100 rounded w-48 shadow-sm relative z-50">
-                                  <Input 
-                                    value={newAmountPaid} 
-                                    onChange={(e) => setNewAmountPaid(e.target.value)} 
-                                    placeholder="المبلغ المحصل" 
-                                    type="number"
-                                    className="h-8 text-xs px-2 border-teal-200" 
-                                  />
-                                  <div className="text-[10px] font-bold text-teal-800 mt-1 border-b border-teal-200 pb-1">القطع المرتجعة:</div>
-                                  <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
-                                    {newReturnedItems.map((ritem, idx) => (
-                                      <div key={idx} className="flex items-center justify-between gap-1 text-[10px] bg-white p-1 rounded">
-                                        <span className="truncate flex-1" title={ritem.title}>{ritem.title}</span>
-                                        <input 
-                                          type="number" 
-                                          min="0" 
-                                          max={ritem.max} 
-                                          value={ritem.quantity}
-                                          onChange={(e) => {
-                                            const v = parseInt(e.target.value) || 0;
-                                            const copy = [...newReturnedItems];
-                                            copy[idx].quantity = v > ritem.max ? ritem.max : v;
-                                            setNewReturnedItems(copy);
-                                          }}
-                                          className="w-10 h-6 border rounded px-1 text-center"
-                                        />
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
 
-                              {!["pending", "returned_inventory", "shipped", "returned_shipping", "cancelled", "delivered"].includes(newStatus) && (
+                              {!["pending", "returned_inventory", "shipped", "returned_shipping", "cancelled", "delivered", "partially_delivered"].includes(newStatus) && (
                                 <select
                                   className={`flex h-7 w-32 rounded-md border px-1 py-0 text-[10px] focus:outline-none ${newStockLocation === "inventory" ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-green-50 text-green-700 border-green-200"}`}
                                   value={newStockLocation}
@@ -1435,6 +1418,67 @@ export default function OrdersPage() {
               }}
             >
               تأكيد
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Partial Delivery Modal */}
+      <Dialog open={partialModalOpen} onOpenChange={setPartialModalOpen}>
+        <DialogContent className="sm:max-w-[450px]" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-teal-700">تفاصيل التوصيل الجزئي</DialogTitle>
+            <DialogDescription>
+              {partialOrder ? `طلب #${partialOrder.id.substring(0,8)}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex flex-col gap-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-teal-700 font-bold">المبلغ المحصل الفعلي</Label>
+              <Input 
+                value={partialNewTotal} 
+                onChange={(e) => setPartialNewTotal(e.target.value)} 
+                placeholder="أدخل المبلغ المحصل" 
+                type="number"
+                className="border-teal-200 focus-visible:ring-teal-500 text-lg font-bold" 
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-teal-700 font-bold">القطع المرتجعة (ستعود للمخزن تلقائياً)</Label>
+              <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                {partialItems.map((ritem, idx) => (
+                  <div key={idx} className="flex items-center justify-between gap-2 bg-white p-3 rounded-md border border-gray-200 shadow-sm">
+                    <span className="truncate flex-1 text-sm font-medium" title={ritem.title}>{ritem.title}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">من أصل {ritem.max}</span>
+                      <Input 
+                        type="number" 
+                        min="0" 
+                        max={ritem.max} 
+                        value={ritem.qty_returned}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value) || 0;
+                          const copy = [...partialItems];
+                          copy[idx].qty_returned = v > ritem.max ? ritem.max : v;
+                          setPartialItems(copy);
+                        }}
+                        className="w-16 h-8 text-center border-teal-100 focus-visible:ring-teal-500"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter className="gap-2 sm:gap-0 flex-row-reverse">
+            <Button onClick={handlePartialDeliverySubmit} disabled={isSubmitting} className="bg-teal-600 hover:bg-teal-700 text-white w-full sm:w-auto">
+              {isSubmitting ? "جاري الحفظ..." : "تأكيد التوصيل الجزئي"}
+            </Button>
+            <Button variant="ghost" onClick={() => setPartialModalOpen(false)} className="w-full sm:w-auto">
+              إلغاء
             </Button>
           </DialogFooter>
         </DialogContent>
