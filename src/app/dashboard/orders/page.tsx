@@ -130,6 +130,7 @@ export default function OrdersPage() {
   const [activeTab, setActiveTab] = useState("active");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [shippingCompanyFilter, setShippingCompanyFilter] = useState("all");
 
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkPaymentStatus, setBulkPaymentStatus] = useState("");
@@ -295,11 +296,14 @@ export default function OrdersPage() {
            
     const statusMatch = statusFilter === "all" || order.status === statusFilter;
            
+    const courier = Array.isArray(order.shipments) ? order.shipments[0]?.courier : order.shipments?.courier;
+    const shippingCompanyMatch = shippingCompanyFilter === "all" || courier === shippingCompanyFilter;
+           
     const isDeleted = order.is_deleted === true;
     if (activeTab === "deleted") {
-      return isDeleted && searchMatch && statusMatch;
+      return isDeleted && searchMatch && statusMatch && shippingCompanyMatch;
     } else {
-      return !isDeleted && searchMatch && statusMatch;
+      return !isDeleted && searchMatch && statusMatch && shippingCompanyMatch;
     }
   });
 
@@ -1151,7 +1155,26 @@ export default function OrdersPage() {
                 </Select>
               </TableHead>
               
-              <TableHead className="text-right">شركة الشحن</TableHead>
+              <TableHead className="text-right p-0">
+                <Select value={shippingCompanyFilter} onValueChange={(val) => setShippingCompanyFilter(val || "all")}>
+                  <SelectTrigger className="w-full border-none bg-transparent shadow-none font-bold text-gray-500 hover:text-gray-900 focus:ring-0 text-right px-4">
+                    <SelectValue placeholder="شركة الشحن">
+                      {shippingCompanyFilter === "all" ? "شركة الشحن" : shippingCompanyFilter}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">الكل</SelectItem>
+                    {Array.from(new Set(orders.map(order => {
+                      const courier = Array.isArray(order.shipments) ? order.shipments[0]?.courier : order.shipments?.courier;
+                      return courier;
+                    }).filter(Boolean))).map((courier, idx) => (
+                      <SelectItem key={idx} value={courier as string}>
+                        {courier as string}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </TableHead>
               <TableHead className="text-right">رقم التتبع</TableHead>
               <TableHead className="text-right" colSpan={activeTab === "active" ? 1 : 2}>ملاحظات</TableHead>
               <TableHead className="text-left"></TableHead>
