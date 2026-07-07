@@ -61,8 +61,19 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const [lowStockVariants, setLowStockVariants] = useState<any[]>([]);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [supplierDues, setSupplierDues] = useState(0);
-  const [isRead, setIsRead] = useState(false);
+  const [isRead, setIsRead] = useState(true);
   const [prevCount, setPrevCount] = useState(0);
+
+  useEffect(() => {
+    const savedIsRead = localStorage.getItem("notifications_is_read");
+    const savedPrevCount = localStorage.getItem("notifications_prev_count");
+    if (savedIsRead !== null) {
+      setIsRead(savedIsRead === "true");
+    }
+    if (savedPrevCount !== null) {
+      setPrevCount(Number(savedPrevCount));
+    }
+  }, []);
   const supabase = createClient();
 
   useEffect(() => {
@@ -102,14 +113,21 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const notificationCount = lowStockVariants.length + (pendingOrdersCount > 0 ? 1 : 0) + (supplierDues > 0 ? 1 : 0);
 
   useEffect(() => {
-    if (notificationCount > prevCount) {
-      setIsRead(false);
+    // Only update and compare if notificationCount is greater than 0
+    // to avoid false resets during initial data loading
+    if (notificationCount > 0) {
+      if (notificationCount > prevCount) {
+        setIsRead(false);
+        localStorage.setItem("notifications_is_read", "false");
+      }
+      setPrevCount(notificationCount);
+      localStorage.setItem("notifications_prev_count", notificationCount.toString());
     }
-    setPrevCount(notificationCount);
   }, [notificationCount, prevCount]);
 
   const handleMarkAllAsRead = () => {
     setIsRead(true);
+    localStorage.setItem("notifications_is_read", "true");
   };
 
   const handleSignOut = async () => {
