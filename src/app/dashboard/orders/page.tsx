@@ -10,7 +10,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Plus, Search, Filter, Printer, ShoppingBag, Eye, Trash2, Edit, ArrowRightLeft, Truck, Check, ChevronsUpDown } from "lucide-react";
+import { Plus, Search, Filter, Printer, ShoppingBag, Eye, Trash2, Edit, ArrowRightLeft, Truck, Check, ChevronsUpDown, Scan } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarIcon, ArrowLeftRight } from "lucide-react";
 import { format } from "date-fns";
@@ -192,6 +192,10 @@ export default function OrdersPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [shippingCompanyFilter, setShippingCompanyFilter] = useState("all");
+
+  const [scannedOrderIds, setScannedOrderIds] = useState<string[]>([]);
+  const [scanInput, setScanInput] = useState("");
+  const scanInputRef = React.useRef<HTMLInputElement>(null);
 
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkPaymentStatus, setBulkPaymentStatus] = useState("");
@@ -395,6 +399,10 @@ export default function OrdersPage() {
   };
 
   const filteredOrders = orders.filter((order) => {
+    if (activeTab === "scan") {
+      return scannedOrderIds.includes(order.id);
+    }
+    
     const statusMatch = statusFilter === "all" || 
                         order.status === statusFilter || 
                         (statusFilter === "cancelled" && ["returned_inventory", "returned_shipping"].includes(order.status));
@@ -1372,6 +1380,12 @@ export default function OrdersPage() {
           >
             سجل المحذوفات
           </button>
+          <button 
+            onClick={() => setActiveTab("scan")}
+            className={`px-4 py-2 rounded-md text-sm font-bold transition-colors flex items-center gap-2 ${activeTab === "scan" ? "bg-white text-purple-600 shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
+          >
+            اسكان الطلب
+          </button>
         </div>
         <div className="flex gap-2 w-full max-w-xl">
           <div className="relative flex-1">
@@ -1381,12 +1395,71 @@ export default function OrdersPage() {
               className="pr-9"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              disabled={activeTab === "scan"}
             />
           </div>
         </div>
       </div>
 
-      {selectedOrderIds.length > 0 && activeTab === "active" && (
+      {activeTab === "scan" && (
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-purple-100 flex items-center gap-4 animate-in fade-in slide-in-from-top-2">
+          <div className="bg-purple-100 text-purple-700 p-3 rounded-lg">
+            <Scan className="w-6 h-6" />
+          </div>
+          <div className="flex-1">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!scanInput.trim()) return;
+              const val = scanInput.trim().toLowerCase();
+              
+              // Find order by tracking number or first 8 chars of ID or full ID
+              const foundOrder = orders.find(o => 
+                (o.id.toLowerCase().startsWith(val)) || 
+                (Array.isArray(o.shipments) ? o.shipments[0]?.tracking_number?.toLowerCase() === val : o.shipments?.tracking_number?.toLowerCase() === val)
+              );
+
+              if (foundOrder) {
+                if (!scannedOrderIds.includes(foundOrder.id)) {
+                  setScannedOrderIds(prev => [foundOrder.id, ...prev]);
+                  toast.success(`تم إيجاد الطلب: #${foundOrder.id.substring(0,8)}`);
+                } else {
+                  toast.error("تم اسكان هذا الطلب بالفعل");
+                }
+              } else {
+                toast.error("لم يتم العثور على طلب بهذا الباركود");
+              }
+              setScanInput("");
+              // Keep focus on input
+              setTimeout(() => {
+                scanInputRef.current?.focus();
+              }, 10);
+            }}>
+              <Input
+                ref={scanInputRef}
+                autoFocus
+                placeholder="اسحب الباركود هنا (رقم الطلب أو رقم التتبع)..."
+                className="w-full text-lg h-12 border-purple-200 focus:ring-purple-500 font-mono"
+                dir="ltr"
+                value={scanInput}
+                onChange={(e) => setScanInput(e.target.value)}
+                onBlur={() => {
+                  // Optional: keep focus automatically if they click away? Might be annoying if they want to click buttons.
+                }}
+              />
+            </form>
+          </div>
+          <Button 
+            variant="outline" 
+            className="text-red-600 hover:bg-red-50 border-red-200"
+            onClick={() => setScannedOrderIds([])}
+            disabled={scannedOrderIds.length === 0}
+          >
+            مسح القائمة
+          </Button>
+        </div>
+      )}
+
+      {selectedOrderIds.length > 0 && (activeTab === "active" || activeTab === "scan") && (
         <div className="bg-indigo-50 border border-indigo-200 text-indigo-800 px-4 py-3 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-0">
           <div className="font-bold flex items-center gap-2">
             <span className="bg-indigo-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs">{selectedOrderIds.length}</span>
