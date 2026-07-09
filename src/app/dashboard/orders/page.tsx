@@ -402,8 +402,7 @@ export default function OrdersPage() {
               } else {
                  const { error } = await supabase.from("shipments").insert({
                    order_id: order.id,
-                   courier: bulkCourier,
-                   tenant_id: tenant?.id
+                   courier: bulkCourier
                  });
                  if (error) { toast.error("فشل إضافة شركة الشحن"); console.error(error); }
               }
