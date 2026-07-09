@@ -188,39 +188,39 @@ export default function OrdersPage() {
   const [newCourier, setNewCourier] = useState("");
   const [newTracking, setNewTracking] = useState("");
 
-  const [activeTab, setActiveTab] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('ordersActiveTab') || "active";
-    }
-    return "active";
-  });
+  const [activeTab, setActiveTab] = useState("active");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [shippingCompanyFilter, setShippingCompanyFilter] = useState("all");
 
-  const [scannedOrderIds, setScannedOrderIds] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('scannedOrderIds');
-      if (saved) {
-        try { return JSON.parse(saved); } catch (e) {}
-      }
-    }
-    return [];
-  });
+  const [scannedOrderIds, setScannedOrderIds] = useState<string[]>([]);
   const [scanInput, setScanInput] = useState("");
   const scanInputRef = React.useRef<HTMLInputElement>(null);
+  
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    setIsMounted(true);
+    const savedTab = localStorage.getItem('ordersActiveTab');
+    if (savedTab) setActiveTab(savedTab);
+    
+    const savedIds = localStorage.getItem('scannedOrderIds');
+    if (savedIds) {
+      try { setScannedOrderIds(JSON.parse(savedIds)); } catch (e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isMounted) {
       localStorage.setItem('ordersActiveTab', activeTab);
     }
-  }, [activeTab]);
+  }, [activeTab, isMounted]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (isMounted) {
       localStorage.setItem('scannedOrderIds', JSON.stringify(scannedOrderIds));
     }
-  }, [scannedOrderIds]);
+  }, [scannedOrderIds, isMounted]);
 
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkPaymentStatus, setBulkPaymentStatus] = useState("");
