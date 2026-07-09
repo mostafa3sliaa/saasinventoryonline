@@ -404,6 +404,29 @@ export default function OrdersPage() {
 
   const handleOrderItemChange = (index: number, field: string, value: string) => {
     const newItems = [...orderItems];
+    
+    if (field === "quantity") {
+      const variantId = newItems[index].variantId;
+      if (variantId) {
+        const v = allVariants.find(av => av.id === variantId);
+        if (v) {
+          let otherQty = 0;
+          newItems.forEach((item, i) => {
+            if (i !== index && item.variantId === variantId) {
+              otherQty += Number(item.quantity) || 0;
+            }
+          });
+          const maxAllowed = Math.max(0, Number(v.stock_quantity) - otherQty);
+          let numVal = Number(value);
+          if (numVal > maxAllowed) {
+            toast.error(`الكمية القصوى المتاحة هي ${maxAllowed}`);
+            numVal = maxAllowed;
+            value = numVal.toString();
+          }
+        }
+      }
+    }
+    
     newItems[index][field] = value;
     if (field === "variantId") {
       const v = allVariants.find(av => av.id === value);
@@ -1206,6 +1229,13 @@ export default function OrdersPage() {
                             <Input 
                               type="number" 
                               min="1" 
+                              max={(() => {
+                                const v = allVariants.find(av => av.id === item.variantId);
+                                if (!v) return undefined;
+                                let otherQty = 0;
+                                orderItems.forEach((oi, i) => { if (i !== index && oi.variantId === item.variantId) otherQty += Number(oi.quantity)||0; });
+                                return Math.max(1, Number(v.stock_quantity) - otherQty);
+                              })()}
                               value={item.quantity} 
                               onChange={(e) => handleOrderItemChange(index, "quantity", e.target.value)} 
                               onFocus={(e) => e.target.select()}

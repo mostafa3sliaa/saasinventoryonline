@@ -46,6 +46,29 @@ export default function ExchangeModal({ open, onOpenChange, order, tenantId, all
   const removeNewItem = (idx: number) => setNewItems(newItems.filter((_, i) => i !== idx));
   const handleNewItemChange = (idx: number, field: string, val: any) => {
     const newArr = [...newItems];
+    
+    if (field === "quantity") {
+      const variantId = newArr[idx].variantId;
+      if (variantId) {
+        const v = allVariants.find((av: any) => String(av.id) === String(variantId));
+        if (v) {
+          let otherQty = 0;
+          newArr.forEach((item, i) => {
+            if (i !== idx && String(item.variantId) === String(variantId)) {
+              otherQty += parseInt(item.quantity) || 0;
+            }
+          });
+          const maxAllowed = Math.max(0, Number(v.stock_quantity) - otherQty);
+          let numVal = parseInt(val);
+          if (numVal > maxAllowed) {
+            toast.error(`الكمية القصوى المتاحة هي ${maxAllowed}`);
+            numVal = maxAllowed;
+            val = numVal.toString();
+          }
+        }
+      }
+    }
+    
     newArr[idx] = { ...newArr[idx], [field]: val };
     if (field === "variantId") {
       const v = allVariants.find((av: any) => String(av.id) === String(val));
@@ -285,7 +308,15 @@ export default function ExchangeModal({ open, onOpenChange, order, tenantId, all
                           </div>
                           <div className="flex items-center gap-1 border rounded-md px-2 bg-white">
                             <Input 
-                              type="number" min="1" placeholder="1" 
+                              type="number" min="1" 
+                              max={(() => {
+                                const v = allVariants.find((av: any) => String(av.id) === String(item.variantId));
+                                if (!v) return undefined;
+                                let otherQty = 0;
+                                newItems.forEach((oi, i) => { if (i !== idx && String(oi.variantId) === String(item.variantId)) otherQty += parseInt(oi.quantity)||0; });
+                                return Math.max(1, Number(v.stock_quantity) - otherQty);
+                              })()}
+                              placeholder="1" 
                               value={item.quantity} 
                               onChange={e => handleNewItemChange(idx, "quantity", e.target.value)}
                               className="h-8 w-16 text-center border-0 focus-visible:ring-0 px-1 text-sm"
