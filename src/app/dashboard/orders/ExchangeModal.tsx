@@ -384,10 +384,9 @@ export default function ExchangeModal({ open, onOpenChange, order, tenantId, all
                       <span className="text-gray-500 font-bold text-xs">ج.م</span>
                     </div>
                   </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
           <DialogFooter className="mt-2 flex gap-2 sm:justify-end">
              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting} className="h-8 text-sm">
                إلغاء
