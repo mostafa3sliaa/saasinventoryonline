@@ -211,19 +211,18 @@ export default function ExchangeModal({ open, onOpenChange, order, tenantId, all
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] p-4 md:p-6" dir="rtl">
-        <DialogHeader className="mb-4">
-          <DialogTitle className="text-xl font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
+      <DialogContent className="sm:max-w-5xl w-[95vw] max-h-[90vh] overflow-y-auto flex flex-col [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-bold text-indigo-900 border-b pb-4 flex items-center gap-2">
             <RefreshCw className="w-5 h-5" />
             <span>إجراء استبدال للطلب #{order?.id?.substring(0,8)}</span>
           </DialogTitle>
-          <DialogDescription className="text-gray-500 mt-1">
+          <DialogDescription className="text-gray-500 mt-2">
             حدد المنتجات التي سيعيدها العميل، وأضف المنتجات الجديدة لتسوية الفروقات.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSave} className="space-y-6">
-          <div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <form onSubmit={handleSave} className="mt-2 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
               {/* Items Section (Right Side - 2/3 width) */}
               <div className="lg:col-span-2 space-y-6">
@@ -390,9 +389,7 @@ export default function ExchangeModal({ open, onOpenChange, order, tenantId, all
               </div>
               
             </div>
-          </div>
-          
-          <DialogFooter className="mt-6">
+          <DialogFooter className="mt-6 flex gap-2 sm:justify-end">
              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                إلغاء
              </Button>
