@@ -311,7 +311,7 @@ export default function SettingsPage() {
   if (tenantLoading) return <div className="flex items-center justify-center h-64 text-gray-500">جاري التحميل...</div>;
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-indigo-50/50 via-white to-purple-50/50 dark:from-[#0F172A] dark:via-[#0F172A] dark:to-[#1E293B] -m-4 sm:-m-8 p-4 sm:p-8 overflow-hidden">
+    <div className="relative min-h-[calc(100vh-4rem)] bg-gradient-to-br from-indigo-50/50 via-white to-purple-50/50 dark:from-[#0F172A] dark:via-[#0F172A] dark:to-[#1E293B] -m-6 md:-m-8 p-6 md:p-8 pb-24 md:pb-8 overflow-hidden">
       {/* Decorative Blobs */}
       <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-indigo-400/20 dark:bg-indigo-600/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-purple-400/20 dark:bg-purple-600/20 rounded-full blur-3xl translate-x-1/3 translate-y-1/3 pointer-events-none" />
