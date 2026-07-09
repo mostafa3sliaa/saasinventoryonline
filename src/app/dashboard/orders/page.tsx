@@ -427,17 +427,17 @@ export default function OrdersPage() {
     setIsSubmitting(true);
     
     // التحقق من توافر المخزون قبل إنشاء الطلب
+    const requestedQty: Record<string, number> = {};
     for (const item of orderItems) {
-      if (!item.variantId) continue;
-      const { data: variantData } = await supabase
-        .from("product_variants")
-        .select("stock_quantity, size, products(name)")
-        .eq("id", item.variantId)
-        .single();
-        
-      if (variantData && variantData.stock_quantity < Number(item.quantity)) {
-        const productName = Array.isArray(variantData.products) ? variantData.products[0]?.name : (variantData.products as any)?.name;
-        toast.error(`❌ عذراً، لا يمكن إتمام الطلب! المخزون المتوفر من ${productName} (${variantData.size}) هو ${variantData.stock_quantity} فقط، وأنت طلبت ${item.quantity}.`);
+      if (item.variantId) {
+        requestedQty[item.variantId] = (requestedQty[item.variantId] || 0) + Number(item.quantity);
+      }
+    }
+    
+    for (const [vId, qty] of Object.entries(requestedQty)) {
+      const v = allVariants.find(av => av.id === vId);
+      if (v && Number(v.stock_quantity) < qty) {
+        toast.error(`❌ عذراً، لا يمكن إتمام الطلب! المخزون المتوفر من ${v.productName} (${v.variantName}) هو ${v.stock_quantity} فقط، وأنت طلبت ${qty}.`);
         setIsSubmitting(false);
         return;
       }
