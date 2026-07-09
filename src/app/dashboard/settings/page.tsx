@@ -311,22 +311,22 @@ export default function SettingsPage() {
   if (tenantLoading) return <div className="flex items-center justify-center h-64 text-gray-500">جاري التحميل...</div>;
 
   return (
-    <div className="relative min-h-[calc(100vh-4rem)] bg-gradient-to-br from-indigo-50/50 via-white to-purple-50/50 dark:from-[#0F172A] dark:via-[#0F172A] dark:to-[#1E293B] -m-6 md:-m-8 p-6 md:p-8 pb-24 md:pb-8 overflow-hidden">
+    <div className="relative min-h-[calc(100vh-4rem)] bg-gradient-to-br from-indigo-50/50 via-white to-purple-50/50 dark:from-[#0F172A] dark:via-[#0F172A] dark:to-[#1E293B] -m-6 md:-m-8 p-4 md:p-6 pb-20 md:pb-6 overflow-hidden">
       {/* Decorative Blobs */}
       <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-indigo-400/20 dark:bg-indigo-600/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-purple-400/20 dark:bg-purple-600/20 rounded-full blur-3xl translate-x-1/3 translate-y-1/3 pointer-events-none" />
       
-      <div className="max-w-6xl mx-auto space-y-8 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500 relative z-10">
+      <div className="max-w-6xl mx-auto space-y-4 pb-4 animate-in fade-in slide-in-from-bottom-4 duration-500 relative z-10">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-3 bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-500/20 dark:to-purple-500/20 text-indigo-700 dark:text-indigo-300 rounded-2xl shadow-inner">
-              <Settings className="w-6 h-6" />
+          <div className="flex items-center gap-3 mb-1">
+            <div className="p-2 bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-500/20 dark:to-purple-500/20 text-indigo-700 dark:text-indigo-300 rounded-xl shadow-inner">
+              <Settings className="w-5 h-5" />
             </div>
-            <h2 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-l from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 tracking-tight">إعدادات النظام</h2>
+            <h2 className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-l from-indigo-600 to-purple-600 dark:from-indigo-400 dark:to-purple-400 tracking-tight">إعدادات النظام</h2>
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 pr-14 leading-relaxed max-w-xl">
+          <p className="text-xs text-gray-500 dark:text-gray-400 pr-12 leading-relaxed max-w-xl">
             قم بتخصيص الهوية البصرية لشركتك، وإدارة فريق العمل والصلاحيات، وتحكم كامل في إعدادات المنصة بما يتناسب مع احتياجات عملك.
           </p>
         </div>
@@ -335,11 +335,11 @@ export default function SettingsPage() {
           <Button 
             onClick={handleSave} 
             disabled={saving} 
-            className="bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-300 px-8 rounded-2xl h-12 font-bold"
+            className="bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white shadow-md shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all duration-300 px-6 rounded-xl h-10 font-bold text-sm"
           >
             {saving ? (
               <span className="flex items-center gap-2">
-                <span className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+                <span className="w-3.5 h-3.5 rounded-full border-2 border-white/20 border-t-white animate-spin" />
                 جاري الحفظ...
               </span>
             ) : (
@@ -352,7 +352,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="general" className="flex flex-col md:flex-row gap-8 w-full items-start" orientation="vertical">
+      <Tabs defaultValue="general" className="flex flex-col md:flex-row gap-4 w-full items-start" orientation="vertical">
         <TabsList className="flex flex-row md:flex-col w-full md:w-64 h-auto items-stretch justify-start rounded-2xl bg-white/60 dark:bg-[#1E293B]/60 backdrop-blur-md p-3 text-gray-500 shadow-lg shadow-indigo-500/5 border border-white/40 dark:border-white/10 shrink-0 gap-2 overflow-x-auto">
           <TabsTrigger 
             value="general" 
@@ -379,7 +379,7 @@ export default function SettingsPage() {
 
         <div className="flex-1 min-w-0 w-full">
         {/* General Settings Tab */}
-        <TabsContent value="general" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0 data-[state=inactive]:hidden">
+        <TabsContent value="general" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 data-[state=inactive]:hidden">
           
           {/* Visual Identity Card */}
           <div className="bg-white/80 dark:bg-[#1E293B]/80 backdrop-blur-xl rounded-3xl shadow-xl shadow-indigo-500/5 border border-white/60 dark:border-white/[0.08] overflow-hidden transition-all duration-300 hover:shadow-indigo-500/10">
@@ -391,32 +391,32 @@ export default function SettingsPage() {
               </div>
             </div>
             
-            <div className="p-8">
-              <div className="flex flex-col md:flex-row gap-10">
+            <div className="p-4 md:p-6">
+              <div className="flex flex-col md:flex-row gap-6 md:gap-10">
                 
                 {/* Form Fields */}
-                <div className="space-y-6 flex-1 max-w-md">
-                  <div className="space-y-2.5">
+                <div className="space-y-4 flex-1 max-w-md">
+                  <div className="space-y-2">
                     <Label htmlFor="companyName" className="text-sm font-medium text-gray-700 dark:text-gray-300">اسم الشركة</Label>
                     <Input 
                       id="companyName" 
                       value={name} 
                       onChange={(e) => setName(e.target.value)} 
-                      className="text-right h-12 bg-white dark:bg-[#0F172A] border-gray-200 dark:border-white/[0.1] focus-visible:ring-indigo-500 rounded-xl"
+                      className="text-right h-10 bg-white dark:bg-[#0F172A] border-gray-200 dark:border-white/[0.1] focus-visible:ring-indigo-500 rounded-xl"
                       placeholder="أدخل اسم الشركة..."
                     />
                   </div>
                   
-                  <div className="space-y-2.5">
+                  <div className="space-y-2">
                     <Label htmlFor="primaryColor" className="text-sm font-medium text-gray-700 dark:text-gray-300">اللون الأساسي (Primary Color)</Label>
-                    <div className="flex gap-4 items-center p-3 rounded-xl border border-gray-200 dark:border-white/[0.1] bg-gray-50 dark:bg-[#0F172A]">
-                      <div className="relative overflow-hidden rounded-lg w-10 h-10 border border-black/10 shrink-0 shadow-sm">
+                    <div className="flex gap-4 items-center p-2 rounded-xl border border-gray-200 dark:border-white/[0.1] bg-gray-50 dark:bg-[#0F172A]">
+                      <div className="relative overflow-hidden rounded-lg w-8 h-8 border border-black/10 shrink-0 shadow-sm">
                         <input 
                           id="primaryColor" 
                           type="color"
                           value={color} 
                           onChange={(e) => setColor(e.target.value)} 
-                          className="absolute -top-2 -left-2 w-16 h-16 cursor-pointer"
+                          className="absolute -top-2 -left-2 w-12 h-12 cursor-pointer"
                         />
                       </div>
                       <div className="flex-1 font-mono text-sm text-gray-600 dark:text-gray-300 dir-ltr">{color.toUpperCase()}</div>
@@ -426,18 +426,18 @@ export default function SettingsPage() {
 
                 {/* Logo Upload */}
                 <div className="flex-1">
-                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2.5 block">شعار الشركة (Logo)</Label>
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">شعار الشركة (Logo)</Label>
                   <div 
                     onClick={() => fileInputRef.current?.click()}
-                    className="group relative flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-200 dark:border-white/[0.1] rounded-2xl bg-gray-50 dark:bg-[#0F172A] hover:bg-indigo-50/50 dark:hover:bg-indigo-500/5 hover:border-indigo-300 dark:hover:border-indigo-500/30 transition-all cursor-pointer overflow-hidden min-h-[220px]"
+                    className="group relative flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-200 dark:border-white/[0.1] rounded-2xl bg-gray-50 dark:bg-[#0F172A] hover:bg-indigo-50/50 dark:hover:bg-indigo-500/5 hover:border-indigo-300 dark:hover:border-indigo-500/30 transition-all cursor-pointer overflow-hidden min-h-[140px]"
                   >
                     {logoUrl ? (
-                      <div className="relative w-40 h-40 flex items-center justify-center p-4 bg-white dark:bg-[#1E293B] rounded-xl shadow-sm border border-gray-100 dark:border-white/[0.05] group-hover:scale-105 transition-transform duration-300 z-10">
+                      <div className="relative w-24 h-24 flex items-center justify-center p-2 bg-white dark:bg-[#1E293B] rounded-xl shadow-sm border border-gray-100 dark:border-white/[0.05] group-hover:scale-105 transition-transform duration-300 z-10">
                         <img src={logoUrl} alt="Logo" className="max-w-full max-h-full object-contain" />
                       </div>
                     ) : (
-                      <div className="w-20 h-20 mb-4 rounded-full bg-white dark:bg-[#1E293B] shadow-sm border border-gray-100 dark:border-white/[0.05] flex items-center justify-center text-gray-300 dark:text-gray-600 group-hover:scale-110 group-hover:text-indigo-400 transition-all duration-300 z-10">
-                        <ImageIcon size={32} />
+                      <div className="w-12 h-12 mb-2 rounded-full bg-white dark:bg-[#1E293B] shadow-sm border border-gray-100 dark:border-white/[0.05] flex items-center justify-center text-gray-300 dark:text-gray-600 group-hover:scale-110 group-hover:text-indigo-400 transition-all duration-300 z-10">
+                        <ImageIcon size={24} />
                       </div>
                     )}
                     
@@ -472,7 +472,7 @@ export default function SettingsPage() {
             {/* Soft red glow effect */}
             <div className="absolute inset-0 bg-gradient-to-br from-red-50/50 to-transparent dark:from-red-900/10 dark:to-transparent pointer-events-none" />
             
-            <div className="p-8 relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="p-4 md:p-6 relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-start gap-4">
                 <div className="p-3 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-xl shrink-0 group-hover:scale-110 transition-transform">
                   <ShieldAlert className="w-6 h-6" />
@@ -491,7 +491,7 @@ export default function SettingsPage() {
                 variant="destructive" 
                 onClick={handleResetData} 
                 disabled={resetting || currentUser?.role !== "admin"} 
-                className="shrink-0 h-12 px-6 rounded-xl shadow-sm hover:shadow-md transition-all font-semibold"
+                className="shrink-0 h-10 px-4 rounded-xl shadow-sm hover:shadow-md transition-all font-semibold text-sm"
               >
                 {resetting ? "جاري مسح البيانات..." : "مسح جميع البيانات والبدء من جديد"}
               </Button>
@@ -500,7 +500,7 @@ export default function SettingsPage() {
         </TabsContent>
 
         {/* Users Management Tab */}
-        <TabsContent value="users" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0 data-[state=inactive]:hidden">
+        <TabsContent value="users" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 data-[state=inactive]:hidden">
           <div className="bg-white/80 dark:bg-[#1E293B]/80 backdrop-blur-xl rounded-3xl shadow-xl shadow-indigo-500/5 border border-white/60 dark:border-white/[0.08] overflow-hidden transition-all duration-300 hover:shadow-indigo-500/10">
             
             <div className="border-b border-gray-100 dark:border-white/[0.06] p-6 bg-gray-50/50 dark:bg-white/[0.02] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -622,7 +622,7 @@ export default function SettingsPage() {
         </TabsContent>
       
         {/* Activity Log Tab */}
-        <TabsContent value="activity" className="space-y-6 focus-visible:outline-none focus-visible:ring-0 mt-0 data-[state=inactive]:hidden">
+        <TabsContent value="activity" className="space-y-4 focus-visible:outline-none focus-visible:ring-0 mt-0 data-[state=inactive]:hidden">
           <div className="bg-white/80 dark:bg-[#1E293B]/80 backdrop-blur-xl rounded-3xl shadow-xl shadow-indigo-500/5 border border-white/60 dark:border-white/[0.08] overflow-hidden transition-all duration-300 hover:shadow-indigo-500/10">
             <div className="border-b border-gray-100 dark:border-white/[0.06] p-6 bg-gradient-to-r from-gray-50/50 to-white dark:from-white/[0.02] dark:to-transparent flex items-center gap-4">
               <Activity className="w-6 h-6 text-indigo-600 drop-shadow-sm" />
