@@ -211,8 +211,8 @@ export default function ExchangeModal({ open, onOpenChange, order, tenantId, all
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl max-h-[90vh] flex flex-col p-0 border-0 shadow-2xl overflow-hidden rounded-xl" dir="rtl">
-        <DialogHeader className="px-6 py-4 border-b shrink-0">
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] p-4 md:p-6" dir="rtl">
+        <DialogHeader className="mb-4">
           <DialogTitle className="text-xl font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-2">
             <RefreshCw className="w-5 h-5" />
             <span>إجراء استبدال للطلب #{order?.id?.substring(0,8)}</span>
@@ -221,8 +221,8 @@ export default function ExchangeModal({ open, onOpenChange, order, tenantId, all
             حدد المنتجات التي سيعيدها العميل، وأضف المنتجات الجديدة لتسوية الفروقات.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSave} className="flex flex-col overflow-hidden">
-          <div className="p-4 md:p-6 overflow-y-auto shrink">
+        <form onSubmit={handleSave} className="space-y-6">
+          <div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
               {/* Items Section (Right Side - 2/3 width) */}
@@ -392,7 +392,7 @@ export default function ExchangeModal({ open, onOpenChange, order, tenantId, all
             </div>
           </div>
           
-          <DialogFooter className="m-0 px-6 py-4 border-t bg-gray-50 flex gap-2 sm:justify-end shrink-0 z-10">
+          <DialogFooter className="mt-6">
              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                إلغاء
              </Button>
