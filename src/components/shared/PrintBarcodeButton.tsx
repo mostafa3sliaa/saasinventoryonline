@@ -26,9 +26,8 @@ export function PrintBarcodeButton({ sku, productName }: { sku: string; productN
             }
             .barcode-container {
               text-align: center;
-              border: 1px solid #ccc;
-              padding: 10px;
-              border-radius: 8px;
+              padding: 20px;
+              background: #ffffff;
             }
             @media print {
               @page { margin: 0; }
@@ -46,8 +45,9 @@ export function PrintBarcodeButton({ sku, productName }: { sku: string; productN
             JsBarcode("#barcode", "${sku}", {
               format: "CODE128",
               width: 2,
-              height: 50,
-              displayValue: true
+              height: 40,
+              displayValue: true,
+              margin: 10
             });
             window.onload = function() {
               window.print();

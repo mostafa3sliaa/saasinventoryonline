@@ -320,7 +320,7 @@ export default function ExchangeModal({ open, onOpenChange, order, tenantId, all
                               })()}
                               placeholder="1" 
                               value={item.quantity} 
-                              onChange={e => updateNewItem(idx, 'quantity', e.target.value)}
+                              onChange={e => handleNewItemChange(idx, 'quantity', e.target.value, e)}
                               className="h-8 text-center text-sm"
                             />
                           </div>

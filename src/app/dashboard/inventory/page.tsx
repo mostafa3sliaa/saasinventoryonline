@@ -10,6 +10,7 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Package, AlertTriangle, Search } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
@@ -19,6 +20,7 @@ import { useTenant } from "@/components/shared/TenantProvider";
 export default function InventoryPage() {
   const { tenant } = useTenant();
   const [products, setProducts] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [productsLimit, setProductsLimit] = useState(50);
   const [hasMoreProducts, setHasMoreProducts] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -28,7 +30,17 @@ export default function InventoryPage() {
 
   useEffect(() => {
     fetchProducts(productsLimit);
+    fetchOrders();
   }, [productsLimit]);
+
+  const fetchOrders = async () => {
+    const { data } = await supabase
+      .from("orders")
+      .select("id, status, notes")
+      .eq("status", "pending")
+      .eq("is_deleted", false);
+    setOrders(data || []);
+  };
 
   const fetchProducts = async (currentLimit = productsLimit) => {
     setLoading(true);
@@ -49,6 +61,59 @@ export default function InventoryPage() {
       setHasMoreProducts((data?.length || 0) >= currentLimit);
     }
     setLoading(false);
+  };
+
+  const getShortageStats = (variantProductName: string, variantNameName: string) => {
+    let ordersCount = 0;
+    let deficitQty = 0;
+
+    orders.forEach(order => {
+      const notes = order.notes || "";
+      if (!notes.includes("[نواقص]")) return;
+
+      let matchedInOrder = false;
+
+      const oosRegexFlexible = /\[نواقص:\s*عجز كمية:\s*(.*?)\s*\(المطلب:\s*(\d+)\s*،\s*المتاح:\s*(\d+)\)\]/g;
+      const oosRegexFlexible2 = /\[نواقص:\s*عجز كمية:\s*(.*?)\s*\(المطلوب?:\s*(\d+)\s*،\s*المتاح:\s*(\d+)\)\]/g;
+      let oosMatch;
+      while ((oosMatch = oosRegexFlexible2.exec(notes)) !== null) {
+        const fullVariantName = oosMatch[1].trim();
+        const reqQty = parseInt(oosMatch[2], 10) || 0;
+        const availQty = parseInt(oosMatch[3], 10) || 0;
+        const deficit = Math.max(0, reqQty - availQty);
+
+        const isMatch = fullVariantName.toLowerCase().includes(variantProductName.toLowerCase()) && 
+                        (variantNameName === "أساسي" || variantNameName === "-" || fullVariantName.toLowerCase().includes(variantNameName.toLowerCase()));
+
+        if (isMatch && deficit > 0) {
+          deficitQty += deficit;
+          matchedInOrder = true;
+        }
+      }
+      oosRegexFlexible2.lastIndex = 0;
+
+      const unmatchedRegex = /\[نواقص:\s*منتج غير متوفر:\s*(.*?)\s*-\s*الكمية:\s*(\d+)\]/g;
+      let match;
+      while ((match = unmatchedRegex.exec(notes)) !== null) {
+        const rawProductName = match[1].toLowerCase();
+        const qty = parseInt(match[2], 10) || 0;
+
+        const isMatch = rawProductName.includes(variantProductName.toLowerCase()) && 
+                        (variantNameName === "أساسي" || variantNameName === "-" || rawProductName.includes(variantNameName.toLowerCase()));
+
+        if (isMatch) {
+          deficitQty += qty;
+          matchedInOrder = true;
+        }
+      }
+      unmatchedRegex.lastIndex = 0;
+
+      if (matchedInOrder) {
+        ordersCount++;
+      }
+    });
+
+    return { ordersCount, deficitQty };
   };
 
   const filteredProducts = products.filter(product => {
@@ -136,6 +201,8 @@ export default function InventoryPage() {
                         else if (ratio <= 0.1) alertText = "متبقي 10% أو أقل";
                         else if (ratio <= 0.2) alertText = "متبقي 20% أو أقل";
                         
+                        const stats = getShortageStats(product.name, variantName);
+                        
                         return (
                           <div key={v.id} className="flex flex-wrap items-center justify-between gap-3 bg-gray-50 dark:bg-white/[0.03] border border-gray-100 dark:border-white/[0.06] p-2.5 rounded-lg hover:bg-gray-100/50 dark:hover:bg-white/[0.05] transition-colors">
                             <div className="flex items-center gap-2">
@@ -147,6 +214,11 @@ export default function InventoryPage() {
                             </div>
                             
                             <div className="flex items-center gap-2">
+                              {stats.deficitQty > 0 && (
+                                <Badge className="text-[10px] py-0 h-5 px-2 font-bold bg-rose-50 text-rose-600 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20">
+                                  🚨 مطلوب: {stats.ordersCount} طلب(ات) | عجز: {stats.deficitQty} ق
+                                </Badge>
+                              )}
                               {isLowStock && (
                                 <Badge variant="destructive" className="text-[10px] py-0 h-5 px-2 flex items-center gap-1 font-semibold bg-red-50 text-red-600 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20">
                                   <AlertTriangle className="w-3 h-3" />

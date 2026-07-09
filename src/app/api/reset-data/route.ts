@@ -13,12 +13,17 @@ export async function POST(request: Request) {
 
     const { data: userData } = await supabase
       .from('users')
-      .select('role')
+      .select('role, tenant_id')
       .eq('id', user.id)
       .single();
 
     if (userData?.role !== 'admin') {
       return NextResponse.json({ error: 'صلاحيات إدارية مطلوبة' }, { status: 403 });
+    }
+
+    const tenantId = userData?.tenant_id;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'حسابك غير مرتبط بمؤسسة' }, { status: 400 });
     }
 
     // Delete from tables in order to respect constraints
@@ -29,7 +34,7 @@ export async function POST(request: Request) {
       const { error } = await supabase
         .from(table)
         .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('tenant_id', tenantId);
         
       if (error) {
         console.error(`Error deleting from ${table}:`, error);

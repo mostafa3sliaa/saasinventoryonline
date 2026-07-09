@@ -10,7 +10,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Plus, Search, Filter, Printer, ShoppingBag, Eye, Trash2, Edit, ArrowRightLeft, Truck, Check, ChevronsUpDown, Scan } from "lucide-react";
+import { Plus, Search, Filter, Printer, ShoppingBag, Eye, Trash2, Edit, ArrowRightLeft, Truck, Check, ChevronsUpDown, Scan, Brain } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarIcon, ArrowLeftRight } from "lucide-react";
 import { format } from "date-fns";
@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/utils/supabase/client";
 import ExchangeModal from "./ExchangeModal";
+import AIOfficeAssistant from "@/components/orders/AIOfficeAssistant";
 import { toast } from "sonner";
 
 import {
@@ -105,6 +106,8 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
+  const [isAIOpen, setIsAIOpen] = useState(false);
+  const [showShortagesReport, setShowShortagesReport] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [customerName, setCustomerName] = useState("");
@@ -120,6 +123,238 @@ export default function OrdersPage() {
   
   const [products, setProducts] = useState<any[]>([]);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+
+  interface ShortageItem {
+    name: string;
+    type: "unmatched" | "low_stock";
+    requiredQty: number;
+    deficitQty: number;
+  }
+
+  const getShortageSummary = (ordersList: any[]): ShortageItem[] => {
+    const activeShortageOrders = ordersList.filter(
+      (o) => !o.is_deleted && o.status === "pending" && o.notes && o.notes.includes("[نواقص]")
+    );
+
+    const summaryMap: { [key: string]: ShortageItem } = {};
+
+    activeShortageOrders.forEach((order) => {
+      const notes = order.notes || "";
+      const unmatchedRegex = /\[نواقص:\s*منتج غير متوفر:\s*(.*?)\s*-\s*الكمية:\s*(\d+)\]/g;
+      let match;
+      while ((match = unmatchedRegex.exec(notes)) !== null) {
+        const name = match[1];
+        const qty = parseInt(match[2], 10) || 0;
+        const key = `unmatched_${name}`;
+        if (summaryMap[key]) {
+          summaryMap[key].requiredQty += qty;
+          summaryMap[key].deficitQty += qty;
+        } else {
+          summaryMap[key] = {
+            name,
+            type: "unmatched",
+            requiredQty: qty,
+            deficitQty: qty,
+          };
+        }
+      }
+      unmatchedRegex.lastIndex = 0;
+
+      const oosRegex = /\[نواقص:\s*عجز كمية:\s*(.*?)\s*\(المطلب:\s*(\d+)\s*،\s*المتاح:\s*(\d+)\)\]/g;
+      // Wait, let's support both 'المطلوب' and 'المطلب' in regex for safety
+      const oosRegexFlexible = /\[نواقص:\s*عجز كمية:\s*(.*?)\s*\(المطلوب?:\s*(\d+)\s*،\s*المتاح:\s*(\d+)\)\]/g;
+      let oosMatch;
+      while ((oosMatch = oosRegexFlexible.exec(notes)) !== null) {
+        const name = oosMatch[1];
+        const reqQty = parseInt(oosMatch[2], 10) || 0;
+        const availQty = parseInt(oosMatch[3], 10) || 0;
+        const deficit = Math.max(0, reqQty - availQty);
+        const key = `low_stock_${name}`;
+        if (summaryMap[key]) {
+          summaryMap[key].requiredQty += reqQty;
+          summaryMap[key].deficitQty += deficit;
+        } else {
+          summaryMap[key] = {
+            name,
+            type: "low_stock",
+            requiredQty: reqQty,
+            deficitQty: deficit,
+          };
+        }
+      }
+      oosRegexFlexible.lastIndex = 0;
+    });
+
+    return Object.values(summaryMap);
+  };
+
+  const handleCopyReport = (shortages: ShortageItem[]) => {
+    let text = `📋 *تقرير النواقص وعجز المخزون للطلبات النشطة*\n`;
+    text += `التاريخ: ${new Date().toLocaleDateString('ar-EG')}\n\n`;
+    
+    shortages.forEach((item, index) => {
+      const typeStr = item.type === "unmatched" ? "غير متطابق بالمخزن" : "عجز كمية";
+      text += `${index + 1}. *${item.name}*\n   - نوع العجز: ${typeStr}\n   - الكمية المطلوبة: ${item.requiredQty}\n   - العجز الفعلي (المطلوب توفيره): *${item.deficitQty} قطعة*\n\n`;
+    });
+    
+    navigator.clipboard.writeText(text);
+    toast.success("تم نسخ تقرير النواقص للحافظة بنجاح!");
+  };
+
+  const handleAutoResolveShortages = async () => {
+    setIsSubmitting(true);
+    let resolvedCount = 0;
+    let matchedCount = 0;
+    try {
+      const pendingShortages = orders.filter(
+        (o) => !o.is_deleted && o.status === "pending" && o.notes && o.notes.includes("[نواقص]")
+      );
+
+      // Fetch fresh stock from database to avoid stale data
+      const { data: freshVariants } = await supabase
+        .from("product_variants")
+        .select("id, stock_quantity, selling_price, size, color, products(name)");
+      
+      // Build running stock map from fresh DB data
+      const runningStock: Record<string, number> = {};
+      (freshVariants || []).forEach((v: any) => {
+        runningStock[v.id] = Number(v.stock_quantity) || 0;
+      });
+
+      // Helper for fuzzy matching variants in page.tsx
+      const findBestVariantMatch = (rawName: string): string => {
+        if (!rawName || allVariants.length === 0) return "";
+        const cleanRaw = rawName.toLowerCase().replace(/[^a-zA-Z0-9آ-ي\s]/g, "");
+        const rawWords = cleanRaw.split(/\s+/).filter(w => w.length > 1);
+        
+        let bestMatchId = "";
+        let bestScore = 0;
+        
+        for (const v of allVariants) {
+          const combinedName = `${v.productName} ${v.variantName}`.toLowerCase().replace(/[^a-zA-Z0-9آ-ي\s]/g, "");
+          const variantWords = combinedName.split(/\s+/).filter(w => w.length > 1);
+          
+          let score = 0;
+          for (const rw of rawWords) {
+            if (variantWords.includes(rw)) {
+              score += 2;
+            } else if (variantWords.some(vw => vw.includes(rw) || rw.includes(vw))) {
+              score += 1;
+            }
+          }
+          
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatchId = v.id;
+          }
+        }
+        
+        return bestScore >= 2 ? bestMatchId : "";
+      };
+
+      for (const order of pendingShortages) {
+        let notesText = order.notes || "";
+        let hasChanges = false;
+        
+        // Find all shortage lines in the notes
+        const unmatchedRegex = /\[نواقص:\s*منتج غير متوفر:\s*(.*?)\s*-\s*الكمية:\s*(\d+)\]/g;
+        const oosRegex = /\[نواقص:\s*عجز كمية:\s*(.*?)\s*\(المطلوب?:\s*(\d+)\s*،\s*المتاح:\s*(\d+)\)\]/g;
+        
+        let match;
+        const matchesToProcess = [];
+        
+        // Extract unmatched items
+        while ((match = unmatchedRegex.exec(notesText)) !== null) {
+          matchesToProcess.push({
+            fullText: match[0],
+            rawProductName: match[1],
+            quantity: parseInt(match[2], 10) || 1,
+            type: "unmatched"
+          });
+        }
+        unmatchedRegex.lastIndex = 0;
+
+        // Extract OOS items
+        while ((match = oosRegex.exec(notesText)) !== null) {
+          matchesToProcess.push({
+            fullText: match[0],
+            rawProductName: match[1],
+            quantity: parseInt(match[2], 10) || 1,
+            type: "oos"
+          });
+        }
+        oosRegex.lastIndex = 0;
+
+        for (const m of matchesToProcess) {
+          const matchedVariantId = findBestVariantMatch(m.rawProductName);
+          if (matchedVariantId) {
+            const variant = allVariants.find(av => av.id === matchedVariantId);
+            const availableStock = runningStock[matchedVariantId] !== undefined ? runningStock[matchedVariantId] : 0;
+            
+            // Check if stock is sufficient using running stock tracker
+            if (availableStock >= m.quantity) {
+              const price = variant ? Number(variant.price) || 0 : 0;
+              
+              // Insert item into database order_items
+              await supabase.from("order_items").insert({
+                order_id: order.id,
+                product_variant_id: matchedVariantId,
+                quantity: m.quantity,
+                unit_price: price
+              });
+              
+              // Decrement running stock so next orders see updated value
+              runningStock[matchedVariantId] = availableStock - m.quantity;
+              
+              // Remove this specific shortage line from notes
+              notesText = notesText.replace(m.fullText, "").trim();
+              hasChanges = true;
+              matchedCount++;
+            } else {
+              // Update OOS information with current running stock
+              if (m.type === "unmatched") {
+                const variantName = [variant?.size, variant?.color].filter(c => c && c !== "-").join(" / ") || "أساسي";
+                const newOosText = `[نواقص: عجز كمية: ${variant?.productName} - ${variantName} (المطلوب: ${m.quantity}، المتاح: ${availableStock})]`;
+                notesText = notesText.replace(m.fullText, newOosText);
+                hasChanges = true;
+              }
+            }
+          }
+        }
+
+        // Clean double newlines and spaces
+        notesText = notesText.replace(/\n\n+/g, "\n").trim();
+
+        // Check if there are any remaining shortage tags
+        const stillHasShortages = notesText.includes("[نواقص:") || notesText.includes("عجز كمية") || notesText.includes("منتج غير متوفر");
+        
+        if (!stillHasShortages) {
+          notesText = notesText.replace(/\[نواقص\]/g, "").trim();
+          resolvedCount++;
+          hasChanges = true;
+        }
+
+        if (hasChanges) {
+          await supabase
+            .from("orders")
+            .update({ notes: notesText })
+            .eq("id", order.id);
+        }
+      }
+
+      if (matchedCount > 0 || resolvedCount > 0) {
+        toast.success(`تم مطابقة ${matchedCount} منتجات وحل ${resolvedCount} طلبات بالكامل بنجاح! 🎉`);
+        fetchOrders();
+      } else {
+        toast.info("لا توجد طلبات نواقص متوفرة بالكامل حالياً لتحديثها. تأكد من زيادة الكميات في المخزن أولاً.");
+      }
+    } catch (e: any) {
+      console.error(e);
+      toast.error("حدث خطأ أثناء تحديث النواقص: " + e.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -297,7 +532,9 @@ export default function OrdersPage() {
     setSelectedOrder(order);
     
     let initialStatus = order.status || "pending";
-    if (initialStatus === "returned_inventory" || initialStatus === "returned_shipping") {
+    if (initialStatus === "pending" && order.notes && order.notes.includes('[نواقص]')) {
+      initialStatus = "shortage";
+    } else if (initialStatus === "returned_inventory" || initialStatus === "returned_shipping") {
       initialStatus = "cancelled";
     }
     setNewStatus(initialStatus);
@@ -365,8 +602,28 @@ export default function OrdersPage() {
                 }
               }
             }
-            const orderSource = ["returned_inventory", "pending"].includes(bulkStatus) ? "stock_in_inventory" : "stock_in_shipping";
-            await supabase.from("orders").update({ status: bulkStatus, source: orderSource }).eq("id", order.id);
+            const actualStatus = bulkStatus === "shortage" ? "pending" : bulkStatus;
+            const orderSource = ["returned_inventory", "pending"].includes(actualStatus) ? "stock_in_inventory" : "stock_in_shipping";
+            
+            const updateObj: any = { status: actualStatus, source: orderSource };
+            if (bulkStatus === "shortage") {
+              const currentNotes = order.notes || "";
+              if (!currentNotes.includes("[نواقص]")) {
+                updateObj.notes = currentNotes ? `${currentNotes}\n[نواقص]` : "[نواقص]";
+              }
+            } else {
+              // If status is changed away from shortage, remove [نواقص] from notes
+              let currentNotes = order.notes || "";
+              if (currentNotes.includes("[نواقص]")) {
+                currentNotes = currentNotes
+                  .replace(/\[نواقص\]/g, "")
+                  .replace(/\n?\[نواقص:.*?\]/g, "")
+                  .trim();
+                updateObj.notes = currentNotes;
+              }
+            }
+            
+            await supabase.from("orders").update(updateObj).eq("id", order.id);
 
             // If the status is changing to anything other than returned_inventory/cancelled, 
             // ensure we delete any previous shipping loss transaction for this order
@@ -469,6 +726,15 @@ export default function OrdersPage() {
   });
 
   const filteredOrders = baseOrdersForCounts.filter((order) => {
+    const isOrderShortage = !!(order.notes && order.notes.includes('[نواقص]'));
+    
+    if (statusFilter === "pending") {
+      return order.status === "pending" && !isOrderShortage;
+    }
+    if (statusFilter === "shortage") {
+      return order.status === "pending" && isOrderShortage;
+    }
+    
     const statusMatch = statusFilter === "all" || 
                         order.status === statusFilter || 
                         (statusFilter === "cancelled" && ["returned_inventory", "returned_shipping"].includes(order.status));
@@ -536,23 +802,6 @@ export default function OrdersPage() {
     e.preventDefault();
     setIsSubmitting(true);
     
-    // التحقق من توافر المخزون قبل إنشاء الطلب
-    const requestedQty: Record<string, number> = {};
-    for (const item of orderItems) {
-      if (item.variantId) {
-        requestedQty[item.variantId] = (requestedQty[item.variantId] || 0) + Number(item.quantity);
-      }
-    }
-    
-    for (const [vId, qty] of Object.entries(requestedQty)) {
-      const v = allVariants.find(av => av.id === vId);
-      if (v && Number(v.stock_quantity) < qty) {
-        toast.error(`❌ عذراً، لا يمكن إتمام الطلب! المخزون المتوفر من ${v.productName} (${v.variantName}) هو ${v.stock_quantity} فقط، وأنت طلبت ${qty}.`);
-        setIsSubmitting(false);
-        return;
-      }
-    }
-    
     let customerId = null;
     
     const { data: existingCustomer } = await supabase
@@ -593,6 +842,46 @@ export default function OrdersPage() {
 
     let orderId = editingOrder?.id;
 
+    // Recalculate shortages based on new order items
+    let hasShortage = false;
+    let computedNotes = orderNotes;
+    
+    // Clean any old shortage tags from computedNotes
+    computedNotes = computedNotes
+      .replace(/\[نواقص\]/g, "")
+      .replace(/\n?\[نواقص:.*?\]/g, "")
+      .trim();
+
+    const itemsToInsert = [];
+
+    for (const item of orderItems) {
+      if (!item.variantId) {
+        hasShortage = true;
+        const vText = `[نواقص: منتج غير متوفر: مجهول - الكمية: ${item.quantity}]`;
+        computedNotes = computedNotes ? `${computedNotes}\n${vText}` : vText;
+      } else {
+        const variant = allVariants.find(av => av.id === item.variantId);
+        const stockQty = variant ? Number(variant.stock_quantity) || 0 : 0;
+        
+        // Note: For editing, the old items are deleted and their stock is restored,
+        // so variant.stock_quantity contains the restored stock!
+        if (Number(item.quantity) > stockQty) {
+          hasShortage = true;
+          const vText = `[نواقص: عجز كمية: ${variant?.productName} - ${variant?.variantName} (المطلوب: ${item.quantity}، المتاح: ${stockQty})]`;
+          computedNotes = computedNotes ? `${computedNotes}\n${vText}` : vText;
+        } else {
+          itemsToInsert.push(item);
+        }
+      }
+    }
+
+    if (hasShortage) {
+      const prefixBadge = "[نواقص]";
+      if (!computedNotes.includes(prefixBadge)) {
+        computedNotes = computedNotes ? `${prefixBadge}\n${computedNotes}` : prefixBadge;
+      }
+    }
+
     if (editingOrder) {
       // 1. Delete old items (DB trigger handles stock restoration automatically on DELETE)
       await supabase.from("order_items").delete().eq("order_id", editingOrder.id);
@@ -604,7 +893,7 @@ export default function OrdersPage() {
           customer_id: customerId,
           total_amount: finalTotalAmount,
           shipping_fee: Number(shippingFee) || 0,
-          notes: orderNotes
+          notes: computedNotes
         })
         .eq("id", editingOrder.id);
 
@@ -623,7 +912,7 @@ export default function OrdersPage() {
           source: "stock_in_inventory",
           tenant_id: tenant?.id,
           shipping_fee: Number(shippingFee) || 0,
-          notes: orderNotes
+          notes: computedNotes
         })
         .select("id")
         .single();
@@ -635,7 +924,7 @@ export default function OrdersPage() {
       orderId = order.id;
     }
 
-    for (const item of orderItems) {
+    for (const item of itemsToInsert) {
       if (!item.variantId) continue;
       await supabase
         .from("order_items")
@@ -702,6 +991,10 @@ export default function OrdersPage() {
     if (status === "delivered" && payment === "partial") {
       return <span className="bg-teal-100 text-teal-800 px-3 py-1 rounded-full text-xs font-bold">توصيل جزئي</span>;
     }
+    
+    if (status === "pending" && order.notes && order.notes.includes('[نواقص]')) {
+      return <span className="bg-rose-100 text-rose-800 px-3 py-1 rounded-full text-xs font-bold">نواقص</span>;
+    }
 
     switch(status) {
       case "pending": return <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold">في الانتظار</span>;
@@ -738,12 +1031,27 @@ export default function OrdersPage() {
       return !["cancelled", "returned_inventory", "returned_shipping"].includes(status);
     };
 
-    let dbStatus = newStatus;
+    let dbStatus = newStatus === "shortage" ? "pending" : newStatus;
     if (newStatus === "cancelled") {
       dbStatus = "returned_inventory";
       finalPaymentStatus = "unpaid";
     }
     if (newStatus === "partially_delivered") dbStatus = "delivered";
+
+    // Handle notes for shortage
+    if (newStatus === "shortage") {
+      if (!computedNotes.includes("[نواقص]")) {
+        computedNotes = computedNotes ? `${computedNotes}\n[نواقص]` : "[نواقص]";
+      }
+    } else {
+      // If we are changing away from shortage, clean the notes
+      if (computedNotes.includes("[نواقص]")) {
+        computedNotes = computedNotes
+          .replace(/\[نواقص\]/g, "")
+          .replace(/\n?\[نواقص:.*?\]/g, "")
+          .trim();
+      }
+    }
 
     const currentDeducted = isStockDeducted(selectedOrder.status || "pending");
     const finalDeducted = isStockDeducted(dbStatus);
@@ -967,6 +1275,7 @@ export default function OrdersPage() {
   const getStatusText = (status: string) => {
     switch(status) {
       case "pending": return "في الانتظار";
+      case "shortage": return "نواقص";
       case "shipped": return "في الشحن";
       case "delivered": return "تم التوصيل";
       case "partially_delivered": return "توصيل جزئي";
@@ -1023,7 +1332,7 @@ export default function OrdersPage() {
               <div class="title">${tenant?.name || 'ميتش'} - بوليصة شحن</div>
               <div class="order-number">طلب رقم: #${order.id.substring(0,8)}</div>
               <div style="margin-top: 10px;">
-                <svg class="barcode" data-order-id="${order.id}"></svg>
+                <svg class="barcode" data-order-id="${order.id.substring(0,8)}"></svg>
               </div>
             </div>
             
@@ -1089,10 +1398,10 @@ export default function OrdersPage() {
                   JsBarcode(svg, orderId, {
                     format: "CODE128",
                     lineColor: "#000",
-                    width: 1.5,
+                    width: 2,
                     height: 40,
                     displayValue: true,
-                    margin: 0
+                    margin: 10
                   });
                 }
               });
@@ -1221,10 +1530,10 @@ export default function OrdersPage() {
                   JsBarcode(svg, orderId, {
                     format: "CODE128",
                     lineColor: "#000",
-                    width: 1.5,
+                    width: 2,
                     height: 40,
                     displayValue: true,
-                    margin: 0
+                    margin: 10
                   });
                 }
               });
@@ -1251,10 +1560,22 @@ export default function OrdersPage() {
           <p className="text-sm text-gray-500 mt-1">تابع طلبات عملائك وقم بإدارتها بسهولة</p>
         </div>
         
-        <Button onClick={() => setIsOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-          <Plus className="w-4 h-4 ml-2" />
-          إضافة طلب
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setShowShortagesReport(true)} className="bg-rose-600 hover:bg-rose-700 text-white gap-2 font-bold shadow-sm">
+            <ShoppingBag className="w-4 h-4" />
+            تقرير النواقص 📊
+          </Button>
+
+          <Button onClick={() => setIsAIOpen(true)} className="bg-purple-600 hover:bg-purple-700 text-white gap-2 font-bold shadow-sm">
+            <Brain className="w-4 h-4" />
+            المساعد الذكي 🤖
+          </Button>
+
+          <Button onClick={() => setIsOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Plus className="w-4 h-4 ml-2" />
+            إضافة طلب
+          </Button>
+        </div>
 
         <ExchangeModal
           open={exchangeOpen}
@@ -1264,6 +1585,120 @@ export default function OrdersPage() {
           allVariants={allVariants}
           onSuccess={fetchOrders}
         />
+
+        <AIOfficeAssistant
+          open={isAIOpen}
+          onOpenChange={setIsAIOpen}
+          allVariants={allVariants}
+          tenantId={tenant?.id || ""}
+          onSuccess={fetchOrders}
+        />
+
+        <Dialog open={showShortagesReport} onOpenChange={setShowShortagesReport}>
+          <DialogContent className="sm:max-w-[850px] w-[95vw] max-h-[95vh] flex flex-col !p-6" dir="rtl">
+            <DialogHeader className="pb-3 border-b border-gray-100 shrink-0">
+              <DialogTitle className="text-xl font-bold text-rose-900 flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5 text-rose-600 animate-bounce" />
+                <span>تقرير عجز ونواقص المخزن للطلبات النشطة 📊</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-gray-500 mt-1">
+                يتم هنا تجميع وحساب إجمالي العجز والمنتجات غير المتوفرة لتسهيل الشراء والاستيراد.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto py-4 min-h-[200px] max-h-[75vh] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-rose-200 [&::-webkit-scrollbar-thumb]:rounded-full pr-1">
+              {(() => {
+                const shortages = getShortageSummary(orders);
+                if (shortages.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-10 space-y-3 bg-green-50/50 rounded-xl border border-dashed border-green-200">
+                      <div className="bg-green-100 text-green-700 p-3 rounded-full text-2xl">🎉</div>
+                      <p className="font-bold text-green-800 text-base">لا توجد أي نواقص في الطلبات حالياً!</p>
+                      <p className="text-xs text-green-600">كل المنتجات المطلوبة مطابقة ومتوفرة في المخزن.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-4">
+                    <div className="border border-gray-150 rounded-xl overflow-hidden bg-white shadow-sm">
+                      <Table className="w-full table-fixed">
+                        <TableHeader className="bg-gray-50">
+                          <TableRow>
+                            <TableHead className="text-right text-xs font-bold text-gray-700 py-3">المنتج</TableHead>
+                            <TableHead className="text-right text-xs font-bold text-gray-700 py-3 w-[150px]">نوع العجز</TableHead>
+                            <TableHead className="text-center text-xs font-bold text-gray-700 py-3 w-[100px]">المطلوب الكلي</TableHead>
+                            <TableHead className="text-center text-xs font-bold text-gray-700 py-3 text-rose-600 w-[100px]">العجز الفعلي</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {shortages.map((item, idx) => (
+                            <TableRow key={idx} className="hover:bg-rose-50/20 transition-colors">
+                              <TableCell className="font-semibold text-sm text-gray-900 py-3 whitespace-normal break-words leading-relaxed">{item.name}</TableCell>
+                              <TableCell className="py-3 w-[150px]">
+                                {item.type === "unmatched" ? (
+                                  <span className="bg-red-100 text-red-800 text-[10px] px-2 py-0.5 rounded-full font-bold">غير متطابق بالمخزن</span>
+                                ) : (
+                                  <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold">عجز كمية</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-center font-bold text-gray-700 py-3 w-[100px]">{item.requiredQty}</TableCell>
+                              <TableCell className="text-center font-black text-rose-600 py-3 w-[100px]">{item.deficitQty}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    
+                    <div className="bg-rose-50/60 border border-rose-100 p-3 rounded-lg flex items-center gap-2">
+                      <span className="text-rose-600 text-sm">💡</span>
+                      <p className="text-xs text-rose-800 leading-relaxed font-semibold">
+                        إجمالي عدد النواقص الفريدة: {shortages.length} منتج(ات). إجمالي العجز المطلوب توفيره: {shortages.reduce((sum, item) => sum + item.deficitQty, 0)} قطعة.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <DialogFooter className="pt-3 border-t border-gray-100 flex gap-2 sm:justify-end shrink-0">
+              {(() => {
+                const shortages = getShortageSummary(orders);
+                return (
+                  <>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => setShowShortagesReport(false)} 
+                      className="h-9 text-sm"
+                    >
+                      إغلاق
+                    </Button>
+                    {shortages.length > 0 && (
+                      <>
+                        <Button 
+                          type="button" 
+                          disabled={isSubmitting}
+                          onClick={handleAutoResolveShortages} 
+                          className="bg-green-600 hover:bg-green-700 text-white h-9 text-sm gap-2 font-bold ml-auto"
+                        >
+                          تحديث وحل النواقص المتوفرة 🔄
+                        </Button>
+                        <Button 
+                          type="button" 
+                          onClick={() => handleCopyReport(shortages)} 
+                          className="bg-rose-600 hover:bg-rose-700 text-white h-9 text-sm gap-2 font-bold"
+                        >
+                          نسخ التقرير للواتساب 📋
+                        </Button>
+                      </>
+                    )}
+                  </>
+                );
+              })()}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         
         <Dialog open={isOpen} onOpenChange={handleCloseDialog}>
           <DialogContent className="sm:max-w-[900px] w-[95vw] max-h-[95vh] !p-4 !gap-2 overflow-y-hidden flex flex-col [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" dir="rtl">
@@ -1472,7 +1907,20 @@ export default function OrdersPage() {
             <form onSubmit={(e) => {
               e.preventDefault();
               if (!scanInput.trim()) return;
-              const val = scanInput.trim().toLowerCase();
+
+              const translateArabicInput = (str: string) => {
+                const map: Record<string, string> = {
+                  'ش': 'a', 'ؤ': 'c', 'ي': 'd', 'ث': 'e', 'ب': 'f',
+                  'ض': 'q', 'ص': 'w', 'ق': 'r', 'ف': 't', 'غ': 'y', 'ع': 'u', 'ه': 'i', 'خ': 'o', 'ح': 'p', 'ج': '[', 'د': ']',
+                  'س': 's', 'ل': 'g', 'ا': 'h', 'ت': 'j', 'ن': 'k', 'م': 'l', 'ك': ';', 'ط': "'",
+                  'ئ': 'z', 'ء': 'x', 'ر': 'v', 'ى': 'n', 'ة': 'm', 'و': ',', 'ز': '.', 'ظ': '/',
+                  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
+                };
+                let result = str.replace(/لا/g, 'b');
+                return result.split('').map(char => map[char] || char).join('');
+              };
+
+              const val = translateArabicInput(scanInput.trim()).toLowerCase();
               
               // Find order by tracking number or first 8 chars of ID or full ID
               const foundOrder = orders.find(o => 
@@ -1535,6 +1983,7 @@ export default function OrdersPage() {
             >
               <option value="">تغيير الحالة...</option>
               <option value="pending">في الانتظار</option>
+              <option value="shortage">نواقص</option>
               <option value="shipped">في الشحن</option>
               <option value="delivered">تم التوصيل</option>
             </select>
@@ -1599,7 +2048,8 @@ export default function OrdersPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">الحالة</SelectItem>
-                    <SelectItem value="pending">{`في الانتظار (${baseOrdersForCounts.filter(o => o.status === 'pending').length})`}</SelectItem>
+                    <SelectItem value="pending">{`في الانتظار (${baseOrdersForCounts.filter(o => o.status === 'pending' && !(o.notes && o.notes.includes('[نواقص]'))).length})`}</SelectItem>
+                    <SelectItem value="shortage">{`نواقص (${baseOrdersForCounts.filter(o => o.status === 'pending' && o.notes && o.notes.includes('[نواقص]')).length})`}</SelectItem>
                     <SelectItem value="shipped">{`في الشحن (${baseOrdersForCounts.filter(o => o.status === 'shipped').length})`}</SelectItem>
                     <SelectItem value="delivered">{`تم التوصيل (${baseOrdersForCounts.filter(o => o.status === 'delivered').length})`}</SelectItem>
                     <SelectItem value="partially_delivered">{`توصيل جزئي (${baseOrdersForCounts.filter(o => o.status === 'partially_delivered').length})`}</SelectItem>
@@ -1699,6 +2149,7 @@ export default function OrdersPage() {
                                 }}
                               >
                                 <option value="pending">في الانتظار</option>
+                                <option value="shortage">نواقص</option>
                                 <option value="shipped">في الشحن</option>
                                 <option value="delivered">تم التوصيل</option>
                                 <option value="partially_delivered">توصيل جزئي</option>

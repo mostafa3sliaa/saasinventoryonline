@@ -51,8 +51,21 @@ export function POSScanner({ onOrderCreated }: { onOrderCreated?: () => void }) 
   const handleScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      const code = scanCode.trim();
-      if (!code) return;
+      if (!scanCode.trim()) return;
+
+      const translateArabicInput = (str: string) => {
+        const map: Record<string, string> = {
+          'ش': 'a', 'ؤ': 'c', 'ي': 'd', 'ث': 'e', 'ب': 'f',
+          'ض': 'q', 'ص': 'w', 'ق': 'r', 'ف': 't', 'غ': 'y', 'ع': 'u', 'ه': 'i', 'خ': 'o', 'ح': 'p', 'ج': '[', 'د': ']',
+          'س': 's', 'ل': 'g', 'ا': 'h', 'ت': 'j', 'ن': 'k', 'م': 'l', 'ك': ';', 'ط': "'",
+          'ئ': 'z', 'ء': 'x', 'ر': 'v', 'ى': 'n', 'ة': 'm', 'و': ',', 'ز': '.', 'ظ': '/',
+          '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
+        };
+        let result = str.replace(/لا/g, 'b');
+        return result.split('').map(char => map[char] || char).join('');
+      };
+
+      const code = translateArabicInput(scanCode.trim());
 
       // Find product variant by SKU or Barcode
       let foundVariant = null;
