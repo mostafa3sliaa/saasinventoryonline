@@ -222,7 +222,7 @@ export default function ExchangeModal({ open, onOpenChange, order, tenantId, all
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSave} className="flex flex-col flex-1 overflow-hidden">
-          <div className="p-6 overflow-y-auto">
+          <div className="p-6 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
               {/* Items Section (Right Side - 2/3 width) */}
