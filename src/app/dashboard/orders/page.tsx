@@ -390,19 +390,22 @@ export default function OrdersPage() {
                orderUpdates.shipping_fee = Number(bulkShippingFee) || 0;
             }
             if (Object.keys(orderUpdates).length > 0) {
-               await supabase.from("orders").update(orderUpdates).eq("id", order.id);
+               const { error } = await supabase.from("orders").update(orderUpdates).eq("id", order.id);
+               if (error) { toast.error("فشل تحديث سعر الشحن"); console.error(error); }
             }
             
             if (bulkCourier) {
               const { data: shipments } = await supabase.from("shipments").select("id").eq("order_id", order.id);
               if (shipments && shipments.length > 0) {
-                 await supabase.from("shipments").update({ courier: bulkCourier }).eq("id", shipments[0].id);
+                 const { error } = await supabase.from("shipments").update({ courier: bulkCourier }).eq("id", shipments[0].id);
+                 if (error) { toast.error("فشل تحديث شركة الشحن"); console.error(error); }
               } else {
-                 await supabase.from("shipments").insert({
+                 const { error } = await supabase.from("shipments").insert({
                    order_id: order.id,
                    courier: bulkCourier,
                    tenant_id: tenant?.id
                  });
+                 if (error) { toast.error("فشل إضافة شركة الشحن"); console.error(error); }
               }
             }
           }
