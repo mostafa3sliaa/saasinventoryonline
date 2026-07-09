@@ -388,11 +388,10 @@ export default function OrdersPage() {
             const orderUpdates: any = {};
             if (bulkShippingFee !== "") {
                const newShippingFee = Number(bulkShippingFee) || 0;
-               const oldShippingFee = Number(order.shipping_fee) || 0;
-               const feeDiff = newShippingFee - oldShippingFee;
+               const itemsTotal = (order.order_items || []).reduce((acc: number, item: any) => acc + (Number(item.quantity) * Number(item.unit_price)), 0);
                
                orderUpdates.shipping_fee = newShippingFee;
-               orderUpdates.total_amount = (Number(order.total_amount) || 0) + feeDiff;
+               orderUpdates.total_amount = itemsTotal + newShippingFee;
             }
             if (Object.keys(orderUpdates).length > 0) {
                const { error } = await supabase.from("orders").update(orderUpdates).eq("id", order.id);
