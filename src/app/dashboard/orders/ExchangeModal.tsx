@@ -221,8 +221,8 @@ export default function ExchangeModal({ open, onOpenChange, order, tenantId, all
             حدد المنتجات التي سيعيدها العميل، وأضف المنتجات الجديدة لتسوية الفروقات.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSave} className="flex flex-col flex-1 overflow-hidden">
-          <div className="p-6 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <form onSubmit={handleSave} className="flex flex-col overflow-hidden">
+          <div className="p-4 md:p-6 overflow-y-auto shrink">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
               {/* Items Section (Right Side - 2/3 width) */}
@@ -392,7 +392,7 @@ export default function ExchangeModal({ open, onOpenChange, order, tenantId, all
             </div>
           </div>
           
-          <DialogFooter className="px-6 py-4 border-t bg-gray-50 shrink-0">
+          <DialogFooter className="m-0 px-6 py-4 border-t bg-gray-50 flex gap-2 sm:justify-end shrink-0 z-10">
              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                إلغاء
              </Button>
