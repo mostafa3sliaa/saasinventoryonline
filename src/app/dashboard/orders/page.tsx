@@ -1192,7 +1192,7 @@ export default function OrdersPage() {
     }
     
     const orderNameStatus = `#${selectedOrder.id.substring(0,8)}`;
-    logActivity(supabase, tenant?.id, currentUser?.id, `تحديث حالة الطلب إلى: ${getStatusText(dbStatus)}`, "order", selectedOrder.id, { order_name: orderNameStatus });
+    logActivity(supabase, tenant?.id!, currentUser?.id!, `تحديث حالة الطلب إلى: ${getStatusText(dbStatus)}`, "order", selectedOrder.id, { order_name: orderNameStatus });
     setExpandedOrderId(null);
     setNewReturnedItems([]);
     setNewAmountPaid("");

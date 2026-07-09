@@ -112,7 +112,7 @@ export default function SettingsPage() {
     if (error) {
       toast.error("فشل في تحديث صلاحية المستخدم");
     } else {
-      logActivity(supabase, tenant?.id, currentUser?.id, "تغيير صلاحية مستخدم", "user", userId);
+      logActivity(supabase, tenant?.id!, currentUser?.id!, "تغيير صلاحية مستخدم", "user", userId);
       toast.success("تم تحديث الصلاحية بنجاح");
       fetchUsers();
     }
@@ -158,7 +158,7 @@ export default function SettingsPage() {
       return;
     }
 
-    logActivity(supabase, tenant?.id, currentUser?.id, "تعديل بيانات مستخدم", "user", editingUser.id);
+    logActivity(supabase, tenant?.id!, currentUser?.id!, "تعديل بيانات مستخدم", "user", editingUser.id);
     toast.success("تم التعديل بنجاح");
     setEditUserOpen(false);
     fetchUsers();
@@ -178,7 +178,7 @@ export default function SettingsPage() {
     if (error) {
       toast.error("فشل في إزالة المستخدم");
     } else {
-      logActivity(supabase, tenant?.id, currentUser?.id, "إزالة مستخدم", "user", userId);
+      logActivity(supabase, tenant?.id!, currentUser?.id!, "إزالة مستخدم", "user", userId);
       toast.success("تم إزالة المستخدم بنجاح");
       fetchUsers();
     }
@@ -214,7 +214,7 @@ export default function SettingsPage() {
         throw new Error(data.msg || data.message || "فشل إضافة المستخدم");
       }
 
-      logActivity(supabase, tenant?.id, currentUser?.id, "إضافة مستخدم جديد", "user");
+      logActivity(supabase, tenant?.id!, currentUser?.id!, "إضافة مستخدم جديد", "user");
       toast.success("تم إضافة المستخدم بنجاح!");
       setAddUserOpen(false);
       setNewUserName("");
@@ -240,7 +240,7 @@ export default function SettingsPage() {
     if (error) {
       toast.error("حدث خطأ أثناء حفظ الإعدادات");
     } else {
-      logActivity(supabase, tenant?.id, currentUser?.id, "تحديث إعدادات النظام", "settings");
+      logActivity(supabase, tenant?.id!, currentUser?.id!, "تحديث إعدادات النظام", "settings");
       toast.success("تم حفظ الإعدادات بنجاح");
       document.documentElement.style.setProperty("--primary", color);
       if (typeof refreshTenant === "function") {
@@ -297,7 +297,7 @@ export default function SettingsPage() {
       
       if (!res.ok) throw new Error(data.error || "فشل تصفير البيانات");
       
-      logActivity(supabase, tenant?.id, currentUser?.id, "تصفير ومسح جميع البيانات", "settings");
+      logActivity(supabase, tenant?.id!, currentUser?.id!, "تصفير ومسح جميع البيانات", "settings");
       toast.success(data.message);
       // Reload page to reflect changes
       window.location.reload();

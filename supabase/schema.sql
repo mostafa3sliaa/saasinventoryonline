@@ -288,7 +288,11 @@ ALTER TABLE activity_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can access their own tenant" ON tenants FOR ALL USING (id = current_tenant_id());
 
 -- Users
-CREATE POLICY "Users can access co-workers" ON users FOR ALL USING (tenant_id = current_tenant_id());
+CREATE POLICY "Users can view co-workers" ON users FOR SELECT USING (tenant_id = current_tenant_id());
+
+CREATE POLICY "Only admins can update users" ON users FOR UPDATE USING (
+  (SELECT role FROM public.users WHERE id = auth.uid() LIMIT 1) = 'admin' AND tenant_id = current_tenant_id()
+);
 
 -- Other Base Tables
 CREATE POLICY "Tenant Isolation" ON suppliers FOR ALL USING (tenant_id = current_tenant_id());
@@ -318,4 +322,20 @@ CREATE POLICY "Tenant Isolation" ON order_items FOR ALL USING (
 -- Shipments
 CREATE POLICY "Tenant Isolation" ON shipments FOR ALL USING (
   order_id IN (SELECT id FROM orders WHERE tenant_id = current_tenant_id())
+);
+
+-- ==========================================
+-- STORAGE POLICIES
+-- ==========================================
+
+-- Allow authenticated users to upload documents (max 5MB, specific types)
+CREATE POLICY "Allow authenticated uploads" ON storage.objects FOR INSERT TO authenticated WITH CHECK (
+  bucket_id = 'documents' AND 
+  (storage.extension(name) = 'pdf' OR storage.extension(name) = 'png' OR storage.extension(name) = 'jpg') AND
+  length(coalesce(metadata->>'size', '0')::text)::int < 5242880
+);
+
+-- Allow authenticated users to view documents
+CREATE POLICY "Allow authenticated viewing" ON storage.objects FOR SELECT TO authenticated USING (
+  bucket_id = 'documents'
 );
