@@ -135,7 +135,21 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       }
     };
     fetchAlerts();
-  }, [pathname]);
+
+    const channel = supabase
+      .channel('layout-alerts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchAlerts();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'product_variants' }, () => {
+        fetchAlerts();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [pathname, supabase]);
 
   const notificationCount = lowStockVariants.length + (pendingOrdersCount > 0 ? 1 : 0) + (supplierDues > 0 ? 1 : 0);
 
