@@ -331,6 +331,15 @@ export default function OrdersPage() {
             
             const orderSource = ["returned_inventory", "pending"].includes(bulkStatus) ? "stock_in_inventory" : "stock_in_shipping";
             await supabase.from("orders").update({ status: bulkStatus, source: orderSource }).eq("id", order.id);
+
+            // If the status is changing to anything other than returned_inventory/cancelled, 
+            // ensure we delete any previous shipping loss transaction for this order
+            if (!["returned_inventory", "cancelled"].includes(bulkStatus)) {
+              await supabase.from("transactions").delete()
+                .like("description", `%${order.id.substring(0,6)}%`)
+                .eq("category", "مصروفات")
+                .eq("tenant_id", tenant?.id);
+            }
           }
         }
 
@@ -677,34 +686,54 @@ export default function OrdersPage() {
     }
 
     // Process shipping loss independently from stock changes
-    if (shippingLoss && Number(shippingLoss) > 0 && newStatus === "cancelled") {
-      await supabase.from("transactions").insert({
-        tenant_id: tenant?.id,
-        type: "expense",
-        amount: Number(shippingLoss),
-        category: "مصروفات",
-        description: `خسارة شحن للطلب رقم ${selectedOrder.id.substring(0,6)}`,
-        transaction_date: new Date().toISOString()
-      });
-      computedNotes = computedNotes ? `${computedNotes} | خسارة شحن: ${shippingLoss}` : `خسارة شحن: ${shippingLoss}`;
-      setShippingLoss(""); // reset after processing to prevent duplicates
-    } else if (newStatus !== "cancelled") {
-      // If order was cancelled with loss, but now changed to delivered/shipped, remove the shipping loss expense
-      await supabase.from("transactions").delete().like("description", `%${selectedOrder.id.substring(0,6)}%`).eq("tenant_id", tenant?.id);
-    }
-    
-    if (newStatus === "delivered" && selectedOrder.order_type === "exchange" && customerRefusedShipping) {
-      const shipFee = Number(selectedOrder.shipping_fee || 0);
-      if (shipFee > 0) {
+    if (newStatus === "cancelled") {
+      // First, always delete any existing shipping loss transaction for this order to prevent duplicates
+      await supabase.from("transactions").delete()
+        .like("description", `%${selectedOrder.id.substring(0,6)}%`)
+        .eq("category", "مصروفات")
+        .eq("tenant_id", tenant?.id);
+
+      if (shippingLoss && Number(shippingLoss) > 0) {
         await supabase.from("transactions").insert({
           tenant_id: tenant?.id,
           type: "expense",
-          amount: shipFee,
+          amount: Number(shippingLoss),
           category: "مصروفات",
-          description: `خسارة شحن (رفض العميل) لاستبدال الطلب رقم ${selectedOrder.id.substring(0,6)}`,
+          description: `خسارة شحن للطلب رقم ${selectedOrder.id.substring(0,6)}`,
           transaction_date: new Date().toISOString()
         });
-        computedNotes = computedNotes ? `${computedNotes} | العميل رفض دفع الشحن` : `العميل رفض دفع الشحن`;
+        computedNotes = computedNotes ? `${computedNotes} | خسارة شحن: ${shippingLoss}` : `خسارة شحن: ${shippingLoss}`;
+        setShippingLoss(""); // reset after processing
+      }
+    } else {
+      // If order was changed from cancelled to delivered/shipped, remove any shipping loss expense
+      await supabase.from("transactions").delete()
+        .like("description", `%${selectedOrder.id.substring(0,6)}%`)
+        .eq("category", "مصروفات")
+        .eq("tenant_id", tenant?.id);
+    }
+    
+    if (selectedOrder.order_type === "exchange") {
+      // First, always delete any existing refused shipping transaction for this order to prevent duplicates
+      await supabase.from("transactions").delete()
+        .like("description", `%رفض العميل%`)
+        .like("description", `%${selectedOrder.id.substring(0,6)}%`)
+        .eq("category", "مصروفات")
+        .eq("tenant_id", tenant?.id);
+
+      if (newStatus === "delivered" && customerRefusedShipping) {
+        const shipFee = Number(selectedOrder.shipping_fee || 0);
+        if (shipFee > 0) {
+          await supabase.from("transactions").insert({
+            tenant_id: tenant?.id,
+            type: "expense",
+            amount: shipFee,
+            category: "مصروفات",
+            description: `خسارة شحن (رفض العميل) لاستبدال الطلب رقم ${selectedOrder.id.substring(0,6)}`,
+            transaction_date: new Date().toISOString()
+          });
+          computedNotes = computedNotes ? `${computedNotes} | العميل رفض دفع الشحن` : `العميل رفض دفع الشحن`;
+        }
       }
     }
 
