@@ -54,16 +54,9 @@ jobs:
           mv deploy.zip deploy_dist/
           mv unzip.php deploy_dist/
 
-      - name: Upload to FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./deploy_dist/
-          dangerous-clean-slate: false
-
-      - name: Trigger Extraction and Restart
+      - name: Upload and Extract via HTTP
         run: |
-          echo "Triggering extraction on server..."
-          curl -s https://inventory.mostafa3slia.com/unzip.php
+          echo "Uploading deploy.zip to server..."
+          curl -X POST -F "file=@deploy_dist/deploy.zip" -F "token=${{ secrets.DEPLOY_TOKEN }}" https://inventory.mostafa3slia.com/upload.php
+
+
