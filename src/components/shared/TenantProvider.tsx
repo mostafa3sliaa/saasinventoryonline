@@ -8,6 +8,9 @@ interface Tenant {
   name: string;
   logo_url: string | null;
   primary_color: string | null;
+  subscription_plan?: string;
+  account_status?: string;
+  trial_ends_at?: string;
 }
 
 interface TenantContextType {

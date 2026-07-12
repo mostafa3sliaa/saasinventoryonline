@@ -190,6 +190,13 @@ export default function SettingsPage() {
     setAddingUser(true);
 
     try {
+      const limit = tenant.subscription_plan === 'pro' ? 5 : (tenant.subscription_plan === 'basic' ? 2 : 10);
+      if (users.length >= limit) {
+         toast.error(`لقد وصلت للحد الأقصى لعدد المستخدمين (${limit}) في باقتك الحالية.`);
+         setAddingUser(false);
+         return;
+      }
+
       const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/signup`, {
         method: "POST",
         headers: {
@@ -745,8 +752,8 @@ export default function SettingsPage() {
                 </div>
                 
                 <div className="space-y-2.5">
-                  <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300">الصلاحية (الدور)</Label>
-                  <Select value={newUserRole} onValueChange={setNewUserRole}>
+                <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300">صلاحية المستخدم</Label>
+                <Select value={newUserRole} onValueChange={(val) => setNewUserRole(val || 'employee')}>
                     <SelectTrigger className="h-11 rounded-xl bg-gray-50 dark:bg-[#0F172A] border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-[#1E293B] transition-colors">
                       <SelectValue />
                     </SelectTrigger>
@@ -880,7 +887,7 @@ export default function SettingsPage() {
                 
                 <div className="space-y-2.5">
                   <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300">الصلاحية (الدور)</Label>
-                  <Select value={editRole} onValueChange={setEditRole} disabled={editingUser.id === currentUser?.id}>
+                  <Select value={editRole} onValueChange={(val) => setEditRole(val || 'employee')} disabled={editingUser?.id === currentUser?.id}>
                     <SelectTrigger className="h-11 rounded-xl bg-gray-50 dark:bg-[#0F172A] border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-[#1E293B] transition-colors">
                       <SelectValue />
                     </SelectTrigger>

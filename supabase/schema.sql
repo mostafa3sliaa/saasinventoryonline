@@ -8,6 +8,9 @@ CREATE TABLE tenants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   logo_url TEXT,
+  subscription_plan TEXT DEFAULT 'trial',
+  account_status TEXT DEFAULT 'pending',
+  trial_ends_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '5 days',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -237,8 +240,15 @@ DECLARE
   new_tenant_id uuid;
 BEGIN
   -- Create a new tenant for the user
-  INSERT INTO public.tenants (name)
-  VALUES (COALESCE(new.raw_user_meta_data->>'full_name', 'مؤسسة جديدة'))
+  INSERT INTO public.tenants (name, subscription_plan, account_status)
+  VALUES (
+    COALESCE(new.raw_user_meta_data->>'full_name', 'مؤسسة جديدة'),
+    COALESCE(new.raw_user_meta_data->>'plan_choice', 'trial'),
+    CASE 
+      WHEN COALESCE(new.raw_user_meta_data->>'plan_choice', 'trial') = 'trial' THEN 'active'
+      ELSE 'pending'
+    END
+  )
   RETURNING id INTO new_tenant_id;
 
   -- Create the user profile

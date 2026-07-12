@@ -28,8 +28,12 @@ import {
   Bell,
   Moon,
   Sun,
-  Wallet
+  Wallet,
+  Crown
 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { AlertTriangle } from "lucide-react";
 
 export default function DashboardLayout({
   children,
@@ -50,6 +54,7 @@ const navItems = [
   { href: "/dashboard/inventory", label: "المخزون", icon: Package },
   { href: "/dashboard/orders", label: "الطلبات", icon: Truck },
   { href: "/dashboard/reports", label: "التقارير", icon: BarChart3 },
+  { href: "/dashboard/billing", label: "الباقات والاشتراك", icon: Crown },
   { href: "/dashboard/settings", label: "الإعدادات", icon: Settings },
 ];
 
@@ -63,6 +68,14 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const [supplierDues, setSupplierDues] = useState(0);
   const [isRead, setIsRead] = useState(true);
   const [prevCount, setPrevCount] = useState(0);
+
+  // Trial Period & Activation Logic
+  const isTrial = tenant?.subscription_plan === 'trial';
+  const isPendingActivation = tenant?.account_status === 'pending';
+  const trialEndsAt = tenant?.trial_ends_at ? new Date(tenant.trial_ends_at) : null;
+  const now = new Date();
+  const isExpired = isTrial && trialEndsAt && now > trialEndsAt;
+  const daysRemaining = trialEndsAt ? Math.max(0, Math.ceil((trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))) : 0;
 
   useEffect(() => {
     const savedIsRead = localStorage.getItem("notifications_is_read");
@@ -210,6 +223,60 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     return pathname.startsWith(href);
   };
 
+  // Render Pending Activation Screen
+  if (!loading && isPendingActivation && !pathname.startsWith('/dashboard/billing')) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-[#0F172A] p-6 text-center" dir="rtl">
+        <div className="bg-white dark:bg-[#1E293B] p-8 rounded-3xl shadow-xl max-w-md w-full border border-indigo-100 dark:border-indigo-900/30">
+          <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Crown className="w-10 h-10" />
+          </div>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">حسابك قيد التفعيل</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
+            لقد قمت باختيار <strong>{tenant?.subscription_plan === 'pro' ? 'الباقة الاحترافية' : 'الباقة الأساسية'}</strong>.
+            <br />
+            يرجى تحويل قيمة الباقة على رقم فودافون كاش: <strong>01000000000</strong>
+            <br />
+            ثم التواصل معنا لتفعيل حسابك فوراً.
+          </p>
+          <div className="space-y-3">
+            <Button className="w-full bg-[#25D366] hover:bg-[#1ebd5a] text-white font-bold h-12 text-md" onClick={() => window.open('https://wa.me/201000000000', '_blank')}>
+              تواصل معنا عبر واتساب
+            </Button>
+            <Button variant="outline" className="w-full h-12 text-md" onClick={handleSignOut}>
+              تسجيل الخروج
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Render Lock Screen if Trial is Expired
+  if (!loading && isExpired && !pathname.startsWith('/dashboard/billing')) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-[#0F172A] p-6 text-center" dir="rtl">
+        <div className="bg-white dark:bg-[#1E293B] p-8 rounded-2xl shadow-xl max-w-md w-full border border-red-100 dark:border-red-900/30">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">انتهت الفترة التجريبية</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-8 leading-relaxed">
+            لقد انتهت فترة الـ 5 أيام التجريبية الخاصة بك. يرجى الاشتراك في إحدى الباقات للاستمرار في استخدام النظام وإدارة مخزونك.
+          </p>
+          <div className="space-y-3">
+            <Button onClick={() => router.push('/dashboard/billing')} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12 text-md">
+              تفعيل الاشتراك الآن
+            </Button>
+            <Button variant="outline" className="w-full h-12 text-md" onClick={handleSignOut}>
+              تسجيل الخروج
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-white dark:bg-[#0F172A] overflow-hidden">
       {/* ─── Sidebar (Desktop) ─── */}
@@ -271,18 +338,21 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* ─── Main Content ─── */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Trial Banner */}
+        {isTrial && !isExpired && (
+          <div className="bg-amber-500 text-amber-950 px-4 py-2.5 text-center text-sm font-bold flex items-center justify-center gap-2 shadow-sm z-30">
+            <AlertTriangle className="w-4 h-4" />
+            <span>أنت تستخدم النسخة التجريبية. متبقي لك {daysRemaining} {daysRemaining <= 2 ? 'يوم' : 'أيام'}.</span>
+            <button onClick={() => router.push('/dashboard/billing')} className="underline font-black hover:text-white mr-2 transition-colors">اشترك الآن</button>
+          </div>
+        )}
+
         {/* Header */}
-        <header className="h-16 bg-white dark:bg-[#0F172A] border-b border-gray-100 dark:border-white/[0.06] flex items-center px-6 sticky top-0 z-20">
+        <header className="h-16 bg-white dark:bg-[#0F172A] border-b border-gray-100 dark:border-white/[0.06] flex items-center px-6 sticky top-0 z-20 flex-shrink-0">
           <div className="flex-1" />
           <div className="flex items-center gap-3">
-            {/* Theme toggle */}
-            <button 
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="w-9 h-9 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/[0.06] rounded-lg transition-colors"
-            >
-              {theme === "dark" ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
-            </button>
+            {/* Theme toggle removed */}
             
             {/* Notifications */}
             <DropdownMenu onOpenChange={(open) => { if (open) handleMarkAllAsRead() }}>

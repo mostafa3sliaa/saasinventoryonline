@@ -804,6 +804,19 @@ export default function OrdersPage() {
     e.preventDefault();
     setIsSubmitting(true);
     
+    // Check order limits
+    if (!editingOrder && tenant) {
+      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+      const currentMonthOrdersCount = orders.filter(o => o.created_at >= startOfMonth && !o.is_deleted).length;
+      const limit = tenant.subscription_plan === 'pro' ? 2000 : (tenant.subscription_plan === 'basic' ? 500 : 10000);
+      
+      if (currentMonthOrdersCount >= limit) {
+         toast.error(`لقد وصلت للحد الأقصى لعدد الطلبات (${limit}) المسموح بها في باقتك الحالية لهذا الشهر.`);
+         setIsSubmitting(false);
+         return;
+      }
+    }
+    
     let customerId = null;
     
     const { data: existingCustomer } = await supabase
@@ -1568,9 +1581,19 @@ export default function OrdersPage() {
             تقرير النواقص 📊
           </Button>
 
-          <Button onClick={() => setIsAIOpen(true)} className="bg-purple-600 hover:bg-purple-700 text-white gap-2 font-bold shadow-sm">
+          <Button 
+            onClick={() => {
+              if (tenant?.subscription_plan === 'basic') {
+                toast.error("ميزة المساعد الذكي (AI) متاحة فقط في الباقة الاحترافية");
+                return;
+              }
+              setIsAIOpen(true);
+            }} 
+            className={`gap-2 font-bold shadow-sm ${tenant?.subscription_plan === 'basic' ? 'bg-gray-200 text-gray-500 cursor-not-allowed hover:bg-gray-200' : 'bg-purple-600 hover:bg-purple-700 text-white'}`}
+          >
             <Brain className="w-4 h-4" />
             المساعد الذكي 🤖
+            {tenant?.subscription_plan === 'basic' && <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded mr-1 leading-none">برو</span>}
           </Button>
 
           <Button onClick={() => setIsOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
