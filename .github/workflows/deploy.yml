@@ -23,9 +23,9 @@ jobs:
 
       - name: Build Next.js
         run: npm run build
-        # We don't necessarily need env vars for the build if they are available in the client, 
-        # but to be safe we pass them if you set them in GitHub Secrets.
-
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
       - name: Prepare Deployment Package
         run: |
           rm -rf .next/cache
