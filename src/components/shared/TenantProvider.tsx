@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
+import { getMyTenantData } from "@/app/actions/tenant";
 
 interface Tenant {
   id: string;
@@ -33,12 +34,10 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [currentUser, setCurrentUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
 
   const loadTenant = async () => {
     try {
       // Use the Server Action to fetch data securely and bypass RLS constraints
-      const { getMyTenantData } = await import("@/app/actions/tenant");
       const data = await getMyTenantData();
       
       if (data.user) {
@@ -77,7 +76,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     
   useEffect(() => {
     loadTenant();
-  }, [supabase]);
+  }, []);
 
   const refreshTenant = async () => {
     await loadTenant();
