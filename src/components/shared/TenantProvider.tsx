@@ -36,52 +36,43 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
 
   const loadTenant = async () => {
-    const { data: userData } = await supabase.auth.getUser();
-    if (userData.user) {
-      // Fetch user to get tenant_id, then fetch tenant
-      const { data: userRecord } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", userData.user.id)
-        .single();
-
-      if (userRecord) {
-        setCurrentUser(userRecord);
+    try {
+      // Use the Server Action to fetch data securely and bypass RLS constraints
+      const { getMyTenantData } = await import("@/app/actions/tenant");
+      const data = await getMyTenantData();
+      
+      if (data.user) {
+        setCurrentUser(data.user);
       }
-
-      if (userRecord?.tenant_id) {
-        const { data: tenantRecord } = await supabase
-          .from("tenants")
-          .select("*")
-          .eq("id", userRecord.tenant_id)
-          .single();
-
-        if (tenantRecord) {
-          setTenant(tenantRecord);
-          
-          // Dynamic white-labeling
-          if (tenantRecord.primary_color) {
-            document.documentElement.style.setProperty(
-              "--primary",
-              tenantRecord.primary_color
-            );
+      
+      if (data.tenant) {
+        setTenant(data.tenant);
+        
+        // Dynamic white-labeling
+        if (data.tenant.primary_color) {
+          document.documentElement.style.setProperty(
+            "--primary",
+            data.tenant.primary_color
+          );
+        }
+        if (data.tenant.name) {
+          document.title = `${data.tenant.name} - نظام إدارة المخزون`;
+        }
+        if (data.tenant.logo_url) {
+          let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+          if (!link) {
+            link = document.createElement('link');
+            link.rel = 'icon';
+            document.head.appendChild(link);
           }
-          if (tenantRecord.name) {
-            document.title = `${tenantRecord.name} - نظام إدارة المخزون`;
-          }
-          if (tenantRecord.logo_url) {
-            let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
-            if (!link) {
-              link = document.createElement('link');
-              link.rel = 'icon';
-              document.head.appendChild(link);
-            }
-            link.href = tenantRecord.logo_url;
-          }
+          link.href = data.tenant.logo_url;
         }
       }
+    } catch (e) {
+      console.error("Failed to load tenant data", e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
     
   useEffect(() => {
