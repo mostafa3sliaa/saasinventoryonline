@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { createClient as createSupabaseAdmin } from "@supabase/supabase-js";
 
 export async function getMyTenantData() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   
   // Create a regular client just to verify the session
   const supabase = createServerClient(
