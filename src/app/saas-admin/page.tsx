@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Check, Clock, ShieldAlert, MoreVertical, Ban, ArrowUpCircle } from "lucide-react";
+import { Check, Clock, ShieldAlert, MoreVertical, Ban, ArrowUpCircle, ArrowRight } from "lucide-react";
 import { getAllTenants, activateTenant, updateTenantPlan, updateTenantStatus } from "@/app/actions/admin";
 import {
   DropdownMenu,
@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import Link from "next/link";
 
 export default function SaaSAdminPage() {
   const [tenants, setTenants] = useState<any[]>([]);
@@ -55,14 +56,21 @@ export default function SaaSAdminPage() {
 
   return (
     <div className="max-w-6xl mx-auto p-8" dir="rtl">
-      <div className="flex items-center gap-4 mb-8">
-        <div className="w-12 h-12 bg-red-100 text-red-600 rounded-xl flex items-center justify-center">
-          <ShieldAlert className="w-6 h-6" />
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-red-100 text-red-600 rounded-xl flex items-center justify-center">
+            <ShieldAlert className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">لوحة تحكم النظام (Super Admin)</h1>
+            <p className="text-gray-500">إدارة الاشتراكات وتفعيل حسابات العملاء</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">لوحة تحكم النظام (Super Admin)</h1>
-          <p className="text-gray-500">إدارة الاشتراكات وتفعيل حسابات العملاء</p>
-        </div>
+        <Link href="/dashboard">
+          <Button variant="outline" className="flex items-center gap-2 text-gray-600">
+            العودة للداشبورد <ArrowRight className="w-4 h-4" />
+          </Button>
+        </Link>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
