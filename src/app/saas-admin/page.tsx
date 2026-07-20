@@ -111,10 +111,8 @@ export default function SaaSAdminPage() {
                       <span className="text-gray-400 text-xs font-medium">جاري...</span>
                     ) : (
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
+                        <DropdownMenuTrigger className="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-gray-100 text-gray-500 transition-colors">
+                          <MoreVertical className="h-4 w-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48" dir="rtl">
                           <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
