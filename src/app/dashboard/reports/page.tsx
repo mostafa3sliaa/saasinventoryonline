@@ -19,7 +19,6 @@ export default function ReportsPage() {
 
   useEffect(() => {
     fetchMetrics();
-    generateMockChartData();
   }, [dateRange]);
 
   const fetchMetrics = async () => {
