@@ -22,36 +22,82 @@ export default function ReportsPage() {
     generateMockChartData();
   }, [dateRange]);
 
-  const generateMockChartData = () => {
-    if (dateRange === "monthly") {
-      setChartData([
-        { name: "الأسبوع 1", sales: 4000, purchases: 2400 },
-        { name: "الأسبوع 2", sales: 3000, purchases: 1398 },
-        { name: "الأسبوع 3", sales: 12000, purchases: 9800 },
-        { name: "الأسبوع 4", sales: 2780, purchases: 3908 },
-      ]);
-    } else {
-      setChartData([
-        { name: "الشهر 1", sales: 15000, purchases: 8000 },
-        { name: "الشهر 2", sales: 23000, purchases: 12000 },
-        { name: "الشهر 3", sales: 18000, purchases: 9500 },
-      ]);
-    }
-  };
-
   const fetchMetrics = async () => {
     setLoading(true);
+    
+    // Fetch tenant
+    const { data: tenantData } = await supabase.from("tenants").select("*").single();
+    if (!tenantData) return;
+
     const { data: salesData } = await supabase
       .from("orders")
-      .select("total_amount, shipping_fee")
+      .select("total_amount, shipping_fee, created_at")
+      .eq('tenant_id', tenantData.id)
       .not('status', 'in', '("cancelled","returned_inventory","returned_shipping")');
+      
     const { data: purchasesData } = await supabase
       .from("purchases")
-      .select("total_amount");
+      .select("total_amount, created_at")
+      .eq('tenant_id', tenantData.id);
+
     const tSales = salesData?.reduce((acc, curr) => acc + (Number(curr.total_amount) - Number(curr.shipping_fee || 0)), 0) || 0;
     const tPurchases = purchasesData?.reduce((acc, curr) => acc + Number(curr.total_amount), 0) || 0;
     setSalesTotal(tSales);
     setPurchasesTotal(tPurchases);
+
+    // Aggregate Chart Data
+    const now = new Date();
+    if (dateRange === "monthly") {
+      const weeks: any = { "الأسبوع 1": { sales: 0, purchases: 0 }, "الأسبوع 2": { sales: 0, purchases: 0 }, "الأسبوع 3": { sales: 0, purchases: 0 }, "الأسبوع 4": { sales: 0, purchases: 0 } };
+      
+      salesData?.forEach(order => {
+        const d = new Date(order.created_at);
+        if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+          const week = Math.ceil(d.getDate() / 7);
+          const key = `الأسبوع ${week > 4 ? 4 : week}`;
+          weeks[key].sales += (Number(order.total_amount) - Number(order.shipping_fee || 0));
+        }
+      });
+
+      purchasesData?.forEach(pur => {
+        const d = new Date(pur.created_at);
+        if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+          const week = Math.ceil(d.getDate() / 7);
+          const key = `الأسبوع ${week > 4 ? 4 : week}`;
+          weeks[key].purchases += Number(pur.total_amount);
+        }
+      });
+
+      setChartData(Object.keys(weeks).map(k => ({ name: k, ...weeks[k] })));
+    } else {
+      const months: any = {};
+      for(let i = 2; i >= 0; i--) {
+         let d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+         let monthName = d.toLocaleDateString('ar-EG', { month: 'long' });
+         months[monthName] = { sales: 0, purchases: 0, m: d.getMonth(), y: d.getFullYear() };
+      }
+
+      salesData?.forEach(order => {
+         const d = new Date(order.created_at);
+         for(let key in months) {
+            if(months[key].m === d.getMonth() && months[key].y === d.getFullYear()) {
+               months[key].sales += (Number(order.total_amount) - Number(order.shipping_fee || 0));
+            }
+         }
+      });
+
+      purchasesData?.forEach(pur => {
+         const d = new Date(pur.created_at);
+         for(let key in months) {
+            if(months[key].m === d.getMonth() && months[key].y === d.getFullYear()) {
+               months[key].purchases += Number(pur.total_amount);
+            }
+         }
+      });
+
+      setChartData(Object.keys(months).map(k => ({ name: k, sales: months[k].sales, purchases: months[k].purchases })));
+    }
+
     setLoading(false);
   };
 
