@@ -1,21 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/utils/supabase/client";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Check, Clock, ShieldAlert } from "lucide-react";
+import { getAllTenants, activateTenant } from "@/app/actions/admin";
 
 export default function SaaSAdminPage() {
   const [tenants, setTenants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activating, setActivating] = useState<string | null>(null);
-  const supabase = createClient();
 
   const fetchTenants = async () => {
     try {
-      const { data, error } = await supabase.rpc('get_all_tenants');
-      if (error) throw error;
+      const data = await getAllTenants();
       setTenants(data || []);
     } catch (err: any) {
       console.error(err);
@@ -27,13 +25,12 @@ export default function SaaSAdminPage() {
 
   useEffect(() => {
     fetchTenants();
-  }, [supabase]);
+  }, []);
 
   const handleActivate = async (tenantId: string) => {
     setActivating(tenantId);
     try {
-      const { error } = await supabase.rpc('activate_tenant', { p_tenant_id: tenantId });
-      if (error) throw error;
+      await activateTenant(tenantId);
       toast.success("تم تفعيل الحساب بنجاح");
       fetchTenants();
     } catch (err: any) {
