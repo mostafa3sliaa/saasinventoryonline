@@ -115,7 +115,7 @@ export default function SaaSAdminPage() {
                           <MoreVertical className="h-4 w-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48" dir="rtl">
-                          <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
+                          <div className="px-2 py-1.5 text-sm font-semibold text-gray-900">الإجراءات</div>
                           <DropdownMenuSeparator />
                           {t.account_status !== 'active' && (
                             <DropdownMenuItem onClick={() => handleAction(t.id, "تفعيل الحساب", () => updateTenantStatus(t.id, 'active'))}>
