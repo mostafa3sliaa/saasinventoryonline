@@ -29,7 +29,8 @@ import {
   Moon,
   Sun,
   Wallet,
-  Crown
+  Crown,
+  ShieldAlert
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -54,8 +55,9 @@ const navItems = [
   { href: "/dashboard/inventory", label: "المخزون", icon: Package },
   { href: "/dashboard/orders", label: "الطلبات", icon: Truck },
   { href: "/dashboard/reports", label: "التقارير", icon: BarChart3 },
-  { href: "/dashboard/billing", label: "الباقات والاشتراك", icon: Crown },
+  { href: "/dashboard/billing", label: "الباقة والفواتير", icon: Crown },
   { href: "/dashboard/settings", label: "الإعدادات", icon: Settings },
+  { href: "/saas-admin", label: "الإدارة العليا (SaaS)", icon: ShieldAlert, isSuperAdmin: true },
 ];
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
@@ -300,7 +302,9 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 overflow-y-auto py-4 px-3">
           <ul className="space-y-1">
             {navItems.filter((item) => {
+              if (item.isSuperAdmin && currentUser?.email !== 'bobos@admin.com' && currentUser?.email !== 'momo@inventorysaas.com') return false;
               if (item.href === "/dashboard") return true;
+              if (item.isSuperAdmin) return true;
               if (currentUser?.role === "admin") return true;
               if (Array.isArray(currentUser?.permissions?.pages) && currentUser.permissions.pages.includes(item.href)) return true;
               return false;
