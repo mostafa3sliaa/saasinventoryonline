@@ -3,13 +3,21 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Check, Clock, ShieldAlert } from "lucide-react";
-import { getAllTenants, activateTenant } from "@/app/actions/admin";
+import { Check, Clock, ShieldAlert, MoreVertical, Ban, ArrowUpCircle } from "lucide-react";
+import { getAllTenants, activateTenant, updateTenantPlan, updateTenantStatus } from "@/app/actions/admin";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function SaaSAdminPage() {
   const [tenants, setTenants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activating, setActivating] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   const fetchTenants = async () => {
     try {
@@ -27,17 +35,17 @@ export default function SaaSAdminPage() {
     fetchTenants();
   }, []);
 
-  const handleActivate = async (tenantId: string) => {
-    setActivating(tenantId);
+  const handleAction = async (tenantId: string, actionName: string, actionFn: () => Promise<any>) => {
+    setProcessingId(tenantId);
     try {
-      await activateTenant(tenantId);
-      toast.success("تم تفعيل الحساب بنجاح");
+      await actionFn();
+      toast.success(`تم ${actionName} بنجاح`);
       fetchTenants();
     } catch (err: any) {
       console.error(err);
-      toast.error("فشل تفعيل الحساب");
+      toast.error(`فشل ${actionName}`);
     } finally {
-      setActivating(null);
+      setProcessingId(null);
     }
   };
 
@@ -88,6 +96,10 @@ export default function SaaSAdminPage() {
                       <span className="flex items-center gap-1.5 text-green-600 bg-green-50 px-2.5 py-1 rounded-md w-max font-medium text-xs">
                         <Check className="w-3.5 h-3.5" /> مفعل
                       </span>
+                    ) : t.account_status === 'suspended' ? (
+                      <span className="flex items-center gap-1.5 text-red-600 bg-red-50 px-2.5 py-1 rounded-md w-max font-medium text-xs">
+                        <Ban className="w-3.5 h-3.5" /> موقوف
+                      </span>
                     ) : (
                       <span className="flex items-center gap-1.5 text-amber-600 bg-amber-50 px-2.5 py-1 rounded-md w-max font-medium text-xs">
                         <Clock className="w-3.5 h-3.5" /> بانتظار التفعيل
@@ -95,15 +107,37 @@ export default function SaaSAdminPage() {
                     )}
                   </td>
                   <td className="px-6 py-4 flex justify-center">
-                    {t.account_status === 'pending' && (
-                      <Button
-                        size="sm"
-                        onClick={() => handleActivate(t.id)}
-                        disabled={activating === t.id}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                      >
-                        {activating === t.id ? 'جاري التفعيل...' : 'تفعيل الحساب'}
-                      </Button>
+                    {processingId === t.id ? (
+                      <span className="text-gray-400 text-xs font-medium">جاري...</span>
+                    ) : (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48" dir="rtl">
+                          <DropdownMenuLabel>الإجراءات</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {t.account_status !== 'active' && (
+                            <DropdownMenuItem onClick={() => handleAction(t.id, "تفعيل الحساب", () => updateTenantStatus(t.id, 'active'))}>
+                              <Check className="w-4 h-4 ml-2 text-green-600" /> تفعيل الحساب
+                            </DropdownMenuItem>
+                          )}
+                          {t.account_status === 'active' && (
+                            <DropdownMenuItem onClick={() => handleAction(t.id, "إيقاف الحساب", () => updateTenantStatus(t.id, 'suspended'))}>
+                              <Ban className="w-4 h-4 ml-2 text-red-600" /> إيقاف الحساب
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleAction(t.id, "الترقية للأساسية", () => updateTenantPlan(t.id, 'basic'))} disabled={t.subscription_plan === 'basic'}>
+                            <ArrowUpCircle className="w-4 h-4 ml-2 text-indigo-600" /> الترقية للأساسية
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleAction(t.id, "الترقية للاحترافية", () => updateTenantPlan(t.id, 'pro'))} disabled={t.subscription_plan === 'pro'}>
+                            <ArrowUpCircle className="w-4 h-4 ml-2 text-indigo-600" /> الترقية للاحترافية
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                   </td>
                 </tr>

@@ -70,3 +70,39 @@ export async function activateTenant(tenantId: string) {
   
   return true;
 }
+
+export async function updateTenantPlan(tenantId: string, newPlan: string) {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll() { return cookieStore.getAll(); }, setAll() {} } }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || (user.email !== 'bobos@admin.com' && user.email !== 'momo@inventorysaas.com')) throw new Error("Unauthorized");
+
+  const adminClient = createSupabaseAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const { error } = await adminClient.from("tenants").update({ subscription_plan: newPlan }).eq("id", tenantId);
+  if (error) throw new Error(error.message);
+  
+  return true;
+}
+
+export async function updateTenantStatus(tenantId: string, newStatus: string) {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll() { return cookieStore.getAll(); }, setAll() {} } }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || (user.email !== 'bobos@admin.com' && user.email !== 'momo@inventorysaas.com')) throw new Error("Unauthorized");
+
+  const adminClient = createSupabaseAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const { error } = await adminClient.from("tenants").update({ account_status: newStatus }).eq("id", tenantId);
+  if (error) throw new Error(error.message);
+  
+  return true;
+}
