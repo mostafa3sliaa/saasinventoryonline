@@ -22,3 +22,18 @@ export async function updateSupplierInfo(supplierId: string, tenantId: string, n
     return { success: false, error: error.message };
   }
 }
+
+export async function deleteSupplier(supplierId: string, tenantId: string) {
+  try {
+    const { error } = await supabase
+      .from('suppliers')
+      .delete()
+      .eq('id', supplierId)
+      .eq('tenant_id', tenantId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}

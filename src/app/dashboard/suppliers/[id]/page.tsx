@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Plus, MinusCircle, Wallet, User, Search, FileText, X, Trash2, Edit2, AlertTriangle } from "lucide-react";
-import { updateSupplierInfo } from "@/app/actions/supplier-actions";
+import { updateSupplierInfo, deleteSupplier } from "@/app/actions/supplier-actions";
 import { createClient } from "@/utils/supabase/client";
 import { toast } from "sonner";
 import { useTenant } from "@/components/shared/TenantProvider";
