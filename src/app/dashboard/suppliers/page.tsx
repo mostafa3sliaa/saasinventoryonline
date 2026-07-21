@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, User, TrendingDown, TrendingUp, Users, ArrowUpRight, ArrowDownRight, UserPlus, Wallet } from "lucide-react";
+import { Plus, Search, User, TrendingDown, TrendingUp, Users, ArrowUpRight, ArrowDownRight, UserPlus, Wallet, Edit2, AlertTriangle } from "lucide-react";
+import { updateSupplierInfo } from "@/app/actions/supplier-actions";
 import { createClient } from "@/utils/supabase/client";
 import { toast } from "sonner";
 import { useTenant } from "@/components/shared/TenantProvider";
@@ -30,6 +31,12 @@ export default function SuppliersPage() {
   // Form state
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+
+  // Edit Supplier State
+  const [editSupplierOpen, setEditSupplierOpen] = useState(false);
+  const [selectedSupplier, setSelectedSupplier] = useState<any>(null);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
   
   const supabase = createClient();
 
@@ -57,9 +64,14 @@ export default function SuppliersPage() {
     if (!tenant) return;
     
     setIsSubmitting(true);
+    let finalName = name.trim();
+    if (!finalName) {
+      finalName = `مورد جديد ${Math.floor(Math.random() * 1000)}`;
+    }
+
     const { error } = await supabase.from("suppliers").insert({
       tenant_id: tenant.id,
-      name,
+      name: finalName,
       phone,
       balance: 0
     });
@@ -74,6 +86,36 @@ export default function SuppliersPage() {
       fetchSuppliers();
     }
     setIsSubmitting(false);
+  };
+
+  const handleEditClick = (e: React.MouseEvent, s: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedSupplier(s);
+    setEditName(s.name);
+    setEditPhone(s.phone || "");
+    setEditSupplierOpen(true);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tenant || !selectedSupplier) return;
+    setIsSubmitting(true);
+    
+    let finalEditName = editName.trim();
+    if (!finalEditName) {
+      finalEditName = `مورد جديد ${Math.floor(Math.random() * 1000)}`;
+    }
+
+    const res = await updateSupplierInfo(selectedSupplier.id, tenant.id, finalEditName, editPhone);
+    setIsSubmitting(false);
+    if (res.success) {
+      toast.success("تم تحديث بيانات المورد بنجاح");
+      setEditSupplierOpen(false);
+      fetchSuppliers();
+    } else {
+      toast.error(res.error);
+    }
   };
 
   const filteredSuppliers = suppliers.filter(s => 
@@ -116,14 +158,13 @@ export default function SuppliersPage() {
             <form onSubmit={handleAddSupplier}>
               <div className="grid gap-5 py-6">
                 <div className="grid gap-2">
-                  <Label htmlFor="name" className="text-sm font-bold text-gray-700">اسم المورد</Label>
+                  <Label htmlFor="name" className="text-sm font-bold text-gray-700">اسم المورد (اختياري)</Label>
                   <Input 
                     id="name" 
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="h-12 rounded-xl border-gray-200 focus-visible:ring-indigo-500 bg-gray-50/50"
                     placeholder="مثال: شركة النور للتجارة"
-                    required 
                   />
                 </div>
                 <div className="grid gap-2">
@@ -275,10 +316,17 @@ export default function SuppliersPage() {
                   <Link key={supplier.id} href={`/dashboard/suppliers/${supplier.id}`} className="block outline-none group">
                     <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 relative overflow-hidden flex flex-col h-full">
                       
-                      {/* Top Badge */}
+                      {/* Top Badge & Actions */}
                       <div className="flex justify-between items-start mb-4">
-                        <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center border border-gray-100 group-hover:scale-110 transition-transform duration-300">
-                          <User className="w-6 h-6 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                        <div className="flex gap-2 items-center">
+                          <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center border border-gray-100 group-hover:scale-110 transition-transform duration-300">
+                            <User className="w-6 h-6 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                          </div>
+                          <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button variant="ghost" size="icon" onClick={(e) => handleEditClick(e, supplier)} className="h-7 w-7 text-indigo-600 hover:bg-indigo-50">
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </div>
                         <div className={`px-3 py-1 rounded-full text-xs font-bold border ${
                           isWeOwe ? "bg-red-50 text-red-600 border-red-100" : 
@@ -320,6 +368,25 @@ export default function SuppliersPage() {
           </div>
         </div>
       </div>
+      {/* Edit Supplier Dialog */}
+      <Dialog open={editSupplierOpen} onOpenChange={setEditSupplierOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl" dir="rtl">
+          <DialogHeader><DialogTitle>تعديل بيانات التاجر</DialogTitle></DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>اسم التاجر/المورد (اختياري)</Label>
+              <Input value={editName} onChange={e => setEditName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>رقم الهاتف</Label>
+              <Input dir="ltr" className="text-right" value={editPhone} onChange={e => setEditPhone(e.target.value)} />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={isSubmitting} className="bg-indigo-600 w-full">{isSubmitting ? "جاري الحفظ..." : "حفظ التعديلات"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

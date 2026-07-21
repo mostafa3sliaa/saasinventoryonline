@@ -1801,6 +1801,7 @@ export default function OrdersPage() {
                               required 
                               placeholder="السعر"
                               className="h-8 px-2 bg-white text-center text-sm font-semibold text-gray-900 border-gray-200"
+                              onWheel={(e) => (e.target as HTMLElement).blur()}
                             />
                           </div>
                           <div className="w-full md:w-20">
@@ -1820,6 +1821,7 @@ export default function OrdersPage() {
                               required 
                               placeholder="الكمية"
                               className="h-8 px-2 bg-white text-center text-sm font-bold text-indigo-700 border-gray-200"
+                              onWheel={(e) => (e.target as HTMLElement).blur()}
                             />
                           </div>
                           

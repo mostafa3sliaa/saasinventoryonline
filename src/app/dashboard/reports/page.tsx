@@ -12,7 +12,7 @@ import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Ba
 export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [salesTotal, setSalesTotal] = useState(0);
-  const [purchasesTotal, setPurchasesTotal] = useState(0);
+  const [expensesTotal, setExpensesTotal] = useState(0);
   const [dateRange, setDateRange] = useState("monthly");
   const [chartData, setChartData] = useState<any[]>([]);
   const supabase = createClient();
@@ -34,20 +34,21 @@ export default function ReportsPage() {
       .eq('tenant_id', tenantData.id)
       .not('status', 'in', '("cancelled","returned_inventory","returned_shipping")');
       
-    const { data: purchasesData } = await supabase
-      .from("purchases")
-      .select("total_amount, created_at")
-      .eq('tenant_id', tenantData.id);
+    const { data: expensesData } = await supabase
+      .from("transactions")
+      .select("amount, created_at")
+      .eq('tenant_id', tenantData.id)
+      .eq('type', 'expense');
 
     const tSales = salesData?.reduce((acc, curr) => acc + (Number(curr.total_amount) - Number(curr.shipping_fee || 0)), 0) || 0;
-    const tPurchases = purchasesData?.reduce((acc, curr) => acc + Number(curr.total_amount), 0) || 0;
+    const tExpenses = expensesData?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
     setSalesTotal(tSales);
-    setPurchasesTotal(tPurchases);
+    setExpensesTotal(tExpenses);
 
     // Aggregate Chart Data
     const now = new Date();
     if (dateRange === "monthly") {
-      const weeks: any = { "الأسبوع 1": { sales: 0, purchases: 0 }, "الأسبوع 2": { sales: 0, purchases: 0 }, "الأسبوع 3": { sales: 0, purchases: 0 }, "الأسبوع 4": { sales: 0, purchases: 0 } };
+      const weeks: any = { "الأسبوع 1": { sales: 0, expenses: 0 }, "الأسبوع 2": { sales: 0, expenses: 0 }, "الأسبوع 3": { sales: 0, expenses: 0 }, "الأسبوع 4": { sales: 0, expenses: 0 } };
       
       salesData?.forEach(order => {
         const d = new Date(order.created_at);
@@ -58,12 +59,12 @@ export default function ReportsPage() {
         }
       });
 
-      purchasesData?.forEach(pur => {
-        const d = new Date(pur.created_at);
+      expensesData?.forEach(exp => {
+        const d = new Date(exp.created_at);
         if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
           const week = Math.ceil(d.getDate() / 7);
           const key = `الأسبوع ${week > 4 ? 4 : week}`;
-          weeks[key].purchases += Number(pur.total_amount);
+          weeks[key].expenses += Number(exp.amount);
         }
       });
 
@@ -73,7 +74,7 @@ export default function ReportsPage() {
       for(let i = 2; i >= 0; i--) {
          let d = new Date(now.getFullYear(), now.getMonth() - i, 1);
          let monthName = d.toLocaleDateString('ar-EG', { month: 'long' });
-         months[monthName] = { sales: 0, purchases: 0, m: d.getMonth(), y: d.getFullYear() };
+         months[monthName] = { sales: 0, expenses: 0, m: d.getMonth(), y: d.getFullYear() };
       }
 
       salesData?.forEach(order => {
@@ -85,16 +86,16 @@ export default function ReportsPage() {
          }
       });
 
-      purchasesData?.forEach(pur => {
-         const d = new Date(pur.created_at);
+      expensesData?.forEach(exp => {
+         const d = new Date(exp.created_at);
          for(let key in months) {
             if(months[key].m === d.getMonth() && months[key].y === d.getFullYear()) {
-               months[key].purchases += Number(pur.total_amount);
+               months[key].expenses += Number(exp.amount);
             }
          }
       });
 
-      setChartData(Object.keys(months).map(k => ({ name: k, sales: months[k].sales, purchases: months[k].purchases })));
+      setChartData(Object.keys(months).map(k => ({ name: k, sales: months[k].sales, expenses: months[k].expenses })));
     }
 
     setLoading(false);
@@ -224,12 +225,12 @@ export default function ReportsPage() {
 
         <div className="bg-white dark:bg-[#1E293B] rounded-xl border border-gray-100 dark:border-white/[0.06] p-5">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-gray-500">إجمالي المشتريات</span>
+            <span className="text-sm font-medium text-gray-500">إجمالي المصروفات</span>
             <div className="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-500/10 flex items-center justify-center">
               <TrendingDown className="h-4 w-4 text-red-600" />
             </div>
           </div>
-          <div className="text-2xl font-bold text-red-600">{loading ? "..." : purchasesTotal.toLocaleString()} ج.م</div>
+          <div className="text-2xl font-bold text-red-600">{loading ? "..." : expensesTotal.toLocaleString()} ج.م</div>
         </div>
 
         <div className="bg-white dark:bg-[#1E293B] rounded-xl border border-gray-100 dark:border-white/[0.06] p-5">
@@ -239,8 +240,8 @@ export default function ReportsPage() {
               <DollarSign className="h-4 w-4 text-indigo-600" />
             </div>
           </div>
-          <div className={`text-2xl font-bold ${salesTotal - purchasesTotal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-            {loading ? "..." : (salesTotal - purchasesTotal).toLocaleString()} ج.م
+          <div className={`text-2xl font-bold ${salesTotal - expensesTotal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+            {loading ? "..." : (salesTotal - expensesTotal).toLocaleString()} ج.م
           </div>
         </div>
       </div>
@@ -254,7 +255,7 @@ export default function ReportsPage() {
         <TabsContent value="overview" className="space-y-6">
           <div className="bg-white dark:bg-[#1E293B] rounded-xl border border-gray-100 dark:border-white/[0.06] p-5">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
-              مقارنة المبيعات والمشتريات ({dateRange === "monthly" ? "شهري" : "ربع سنوي"})
+              مقارنة المبيعات والمصروفات ({dateRange === "monthly" ? "شهري" : "ربع سنوي"})
             </h3>
             <div className="h-[400px] w-full" dir="ltr">
               <ResponsiveContainer width="100%" height="100%">
@@ -268,7 +269,7 @@ export default function ReportsPage() {
                   />
                   <Legend />
                   <Bar dataKey="sales" name="المبيعات" fill="#4F46E5" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="purchases" name="المشتريات" fill="#EF4444" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="expenses" name="المصروفات" fill="#EF4444" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

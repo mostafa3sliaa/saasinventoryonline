@@ -13,7 +13,7 @@ export default function DashboardPage() {
     pendingOrders: 0,
     inventoryValue: 0,
     supplierDues: 0,
-    vaultProfit: 0,
+    vaultBalance: 0,
     totalOrdersCount: 0,
   });
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
@@ -44,7 +44,8 @@ export default function DashboardPage() {
       totalOrdersRes,
       recentOrdersRes,
       suppliersRes,
-      paidOrdersRes
+      paidOrdersRes,
+      transactionsRes
     ] = await Promise.all([
       // 1. Low Stock & Inventory Value
       supabase.from("product_variants").select(`*, products ( name )`),
@@ -77,7 +78,9 @@ export default function DashboardPage() {
       supabase.from('orders')
         .select(`id, is_deleted, total_amount, shipping_fee, order_items ( quantity, unit_price, product_variants ( normal_cost ) )`)
         .in('payment_status', ['paid', 'partial'])
-        .eq('tenant_id', tenantData.id)
+        .eq('tenant_id', tenantData.id),
+      // 8. Transactions for actual vault balance
+      supabase.from('transactions').select('type, amount').eq('tenant_id', tenantData.id)
     ]);
 
     // Process results
@@ -143,7 +146,21 @@ export default function DashboardPage() {
           
         vaultProfit += (itemRevenue - totalCost);
       });
+      
+      let totalExpense = 0;
+      let totalCapital = 0;
+      let totalIncome = 0;
+      
+      if (transactionsRes?.data) {
+        transactionsRes.data.forEach(t => {
+          if (t.type === 'expense') totalExpense += Number(t.amount);
+          if (t.type === 'capital') totalCapital += Number(t.amount);
+          if (t.type === 'income') totalIncome += Number(t.amount);
+        });
+      }
+      
       newMetrics.vaultProfit = vaultProfit;
+      newMetrics.vaultBalance = totalCapital + totalIncome + vaultProfit - totalExpense;
     }
 
     // Set all metrics at once (single state update instead of 6 separate ones)
@@ -175,15 +192,15 @@ export default function DashboardPage() {
 
         <div className="bg-white dark:bg-[#1E293B] rounded-xl border border-gray-100 dark:border-white/[0.06] p-5">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">الخزنة (الأرباح)</span>
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">الرصيد الحالي للخزنة</span>
             <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center">
               <Wallet className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             </div>
           </div>
           <div className="text-2xl font-bold text-gray-900 dark:text-white" dir="ltr">
-            {metrics.vaultProfit.toLocaleString()} <span className="text-sm font-normal text-gray-400">ج.م</span>
+            {metrics.vaultBalance?.toLocaleString() || '0'} <span className="text-sm font-normal text-gray-400">ج.م</span>
           </div>
-          <p className="text-xs text-gray-400 mt-1">من الطلبات المدفوعة</p>
+          <p className="text-xs text-gray-400 mt-1">شامل الأرباح، الإيداعات، ومخصوم المصروفات</p>
         </div>
         
         <div className="bg-white dark:bg-[#1E293B] rounded-xl border border-gray-100 dark:border-white/[0.06] p-5">

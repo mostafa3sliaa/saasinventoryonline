@@ -82,23 +82,36 @@ export default function AIOfficeAssistant({ open, onOpenChange, allVariants, ten
   // Fuzzy match function for product variants
   const matchVariant = (rawName: string): string => {
     if (!rawName || allVariants.length === 0) return "";
-    const cleanRaw = rawName.toLowerCase().replace(/[^a-zA-Z0-9آ-ي\s]/g, "");
-    const rawWords = cleanRaw.split(/\s+/).filter(w => w.length > 1);
+    
+    const convertArabicNumerals = (str: string) => {
+      const arabicNumerals = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+      return str.replace(/[٠-٩]/g, w => arabicNumerals.indexOf(w).toString());
+    };
+
+    let cleanRaw = convertArabicNumerals(rawName).toLowerCase().replace(/[^a-zA-Z0-9آ-ي\s]/g, "");
+    const rawWords = cleanRaw.split(/\s+/).filter(w => w.trim().length > 0);
     
     let bestMatchId = "";
     let bestScore = 0;
     
     for (const v of allVariants) {
-      const combinedName = `${v.productName} ${v.variantName}`.toLowerCase().replace(/[^a-zA-Z0-9آ-ي\s]/g, "");
-      const variantWords = combinedName.split(/\s+/).filter(w => w.length > 1);
+      let combinedName = `${v.productName} ${v.variantName}`.toLowerCase();
+      combinedName = convertArabicNumerals(combinedName).replace(/[^a-zA-Z0-9آ-ي\s]/g, "");
+      const variantWords = combinedName.split(/\s+/).filter(w => w.trim().length > 0);
       
       let score = 0;
       for (const rw of rawWords) {
         if (variantWords.includes(rw)) {
           score += 2; // Exact word match
-        } else if (variantWords.some(vw => vw.includes(rw) || rw.includes(vw))) {
-          score += 1; // Partial word match
+        } else if (rw.length > 2 && variantWords.some(vw => vw.includes(rw) || rw.includes(vw))) {
+          score += 1; // Partial word match (only if word is long enough to avoid false positives)
         }
+      }
+
+      // Bonus if exact size match (very helpful for M, L, S, 3X, etc.)
+      const cleanVariantName = convertArabicNumerals(v.variantName || "").toLowerCase().replace(/[^a-zA-Z0-9آ-ي]/g, "");
+      if (cleanVariantName && cleanVariantName !== "-" && cleanRaw.includes(cleanVariantName)) {
+        score += 3;
       }
       
       if (score > bestScore) {
@@ -124,7 +137,7 @@ export default function AIOfficeAssistant({ open, onOpenChange, allVariants, ten
     setLoadingStep("جاري إرسال البيانات للذكاء الاصطناعي لاستخراج الطلبات...");
 
     const systemPrompt = `
-You are an expert order extraction assistant for an e-commerce dashboard.
+You are an expert order extraction assistant for an e-commerce dashboard in Egypt.
 Your task is to parse unstructured input text (which could be chat logs from WhatsApp/Facebook, email order details, or structured lists) and extract all order details into a clean JSON object containing an "orders" array matching the schema below.
 
 Rules:
@@ -136,10 +149,13 @@ Rules:
    - customerAddress: Detailed street address
    - shippingFee: Numeric value for shipping fee. (If mentioned, extract it, e.g. "شحن 50" -> 50. Default to 0)
    - notes: Any special delivery instructions or client comments
-   - items: An array of ordered items, each containing:
-     * rawProductName: The product name, size, color exactly as written in the text (e.g. "كوتشي ابيض مقاس 43")
-     * quantity: Number of items ordered (default to 1)
-     * price: Unit price of the item (if mentioned, extract it as number, default to 0)
+   - items: An array of ordered items. VERY IMPORTANT: You must identify quantities accurately!
+     * If the user writes "2 ابيض" or "قطعتين ابيض" or "٢", the quantity is 2.
+     * If the user writes "ابيض واسود", this means the quantity is 2 (one white, one black). Extract them as two separate items, or one item with quantity 2.
+     * For each item, extract:
+       * rawProductName: The product name, size, color exactly as written in the text (e.g. "كوتشي ابيض مقاس 43")
+       * quantity: Number of items ordered. Read carefully for explicit numbers (2, ٣, 4) or implied numbers (ابيض واسود = 2). default to 1.
+       * price: Unit price of the item (if mentioned, extract it as number, default to 0)
 
 Ensure you return ONLY a raw JSON object matching this structure:
 {
@@ -157,6 +173,81 @@ Ensure you return ONLY a raw JSON object matching this structure:
           "quantity": 1,
           "price": 350
         }
+      ]
+    }
+  ]
+}
+
+EXAMPLES:
+Input:
+[3:04 PM, 7/16/2026] Bobos: احمد ابراهيم الشيشيني
+كفر الشيخ في قريه مسير بجوار مسجد سيدي درغام
+01044125251
+ابيض كم ٣ اكس 
+الاجمالى ٦٧٠
+
+Output:
+{
+  "orders": [
+    {
+      "customerName": "احمد ابراهيم الشيشيني",
+      "customerPhone": "01044125251",
+      "customerCity": "كفر الشيخ",
+      "customerAddress": "قريه مسير بجوار مسجد سيدي درغام",
+      "shippingFee": 0,
+      "notes": "الاجمالى ٦٧٠",
+      "items": [
+        { "rawProductName": "ابيض كم 3 اكس", "quantity": 1, "price": 0 }
+      ]
+    }
+  ]
+}
+
+Input:
+[6:35 AM, 7/20/2026] 3bdo: كريم الخلوصي
+01124870241
+امبابه الكتكات شارع مراد
+ابيض واسود لارج
+1270
+
+Output:
+{
+  "orders": [
+    {
+      "customerName": "كريم الخلوصي",
+      "customerPhone": "01124870241",
+      "customerCity": "الجيزة",
+      "customerAddress": "امبابه الكتكات شارع مراد",
+      "shippingFee": 0,
+      "notes": "الاجمالى 1270",
+      "items": [
+        { "rawProductName": "ابيض لارج", "quantity": 1, "price": 0 },
+        { "rawProductName": "اسود لارج", "quantity": 1, "price": 0 }
+      ]
+    }
+  ]
+}
+
+Input:
+[5:00 PM, 7/20/2026] Mohamed: عبد الحميد على
+01093240000
+طريق اسكندريه مطروح
+2 ابيض لارج كم طويل + بنطلون 
+الاجمالى 1270
+
+Output:
+{
+  "orders": [
+    {
+      "customerName": "عبد الحميد على",
+      "customerPhone": "01093240000",
+      "customerCity": "الاسكندرية",
+      "customerAddress": "طريق اسكندريه مطروح",
+      "shippingFee": 0,
+      "notes": "الاجمالى 1270",
+      "items": [
+        { "rawProductName": "ابيض لارج كم طويل", "quantity": 2, "price": 0 },
+        { "rawProductName": "بنطلون", "quantity": 1, "price": 0 }
       ]
     }
   ]

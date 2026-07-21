@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Plus, MinusCircle, Wallet, User, Search, FileText, X, Trash2 } from "lucide-react";
+import { ArrowRight, Plus, MinusCircle, Wallet, User, Search, FileText, X, Trash2, Edit2, AlertTriangle } from "lucide-react";
+import { updateSupplierInfo } from "@/app/actions/supplier-actions";
 import { createClient } from "@/utils/supabase/client";
 import { toast } from "sonner";
 import { useTenant } from "@/components/shared/TenantProvider";
@@ -54,6 +55,12 @@ export default function SupplierDetailsPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Edit & Delete Supplier State
+  const [editSupplierOpen, setEditSupplierOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [deleteSupplierOpen, setDeleteSupplierOpen] = useState(false);
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -74,6 +81,8 @@ export default function SupplierDetailsPage() {
       
     if (supplierData) {
       setSupplier(supplierData);
+      setEditName(supplierData.name);
+      setEditPhone(supplierData.phone || "");
     }
 
     // Fetch transactions (purchases)
@@ -102,6 +111,40 @@ export default function SupplierDetailsPage() {
     }
     
     setLoading(false);
+  };
+
+  const handlePaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    handleAddTransaction(e);
+  };
+
+  const handleEditSupplier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tenant || !supplier) return;
+    setIsSubmitting(true);
+    const res = await updateSupplierInfo(supplier.id, tenant.id, editName, editPhone);
+    setIsSubmitting(false);
+    if (res.success) {
+      toast.success("تم تحديث بيانات المورد بنجاح");
+      setEditSupplierOpen(false);
+      fetchSupplierData();
+    } else {
+      toast.error("فشل في التحديث: " + res.error);
+    }
+  };
+
+  const handleDeleteSupplier = async () => {
+    if (!tenant || !supplier) return;
+    setIsSubmitting(true);
+    const res = await deleteSupplier(supplier.id, tenant.id);
+    setIsSubmitting(false);
+    if (res.success) {
+      toast.success("تم حذف المورد بنجاح");
+      router.push("/dashboard/suppliers");
+    } else {
+      toast.error(res.error);
+      setDeleteSupplierOpen(false);
+    }
   };
 
   const addPurchaseItem = () => {
@@ -389,6 +432,7 @@ export default function SupplierDetailsPage() {
         returnQty: 0,
         paidAmount: 0,
         items: [],
+        id: tx.id,
       };
     }
 
@@ -484,7 +528,12 @@ export default function SupplierDetailsPage() {
                 <form onSubmit={handleAddTransaction} className="mt-4">
                   <div className="grid gap-6 py-2 max-h-[70vh] overflow-y-auto px-2">
                     
-                    {/* قسم المشتريات (Detailed) */}
+                    {/* Inventory Products Datalist */}
+                    <datalist id="inventory-products">
+                      {Array.from(new Set(products.map(p => p.name.trim()))).map(name => (
+                        <option key={name} value={name} />
+                      ))}
+                    </datalist>                    {/* قسم المشتريات (Detailed) */}
                     <div className="space-y-4 p-5 border border-blue-100 bg-gradient-to-br from-blue-50/80 to-blue-50/30 rounded-3xl shadow-sm">
                       <div className="flex justify-between items-center">
                         <h4 className="font-bold text-blue-900 flex items-center gap-2 text-lg">
@@ -496,12 +545,26 @@ export default function SupplierDetailsPage() {
                       </div>
                       
                       <div className="space-y-3">
-                        {purchaseItems.map((item, idx) => (
+                        {purchaseItems.map((item, idx) => {
+                          const currentProduct = products.find(p => p.name.trim().toLowerCase() === item.productName.trim().toLowerCase());
+                          const currentVariants = currentProduct?.product_variants || [];
+                          const availableSizes = Array.from(new Set(currentVariants.map((v: any) => v.size?.trim()).filter(Boolean)));
+                          const availableCosts = Array.from(new Set(currentVariants.map((v: any) => v.normal_cost?.toString()).filter(Boolean)));
+
+                          return (
                           <div key={idx} className="flex flex-col sm:flex-row gap-3 bg-white p-3 rounded-xl border border-blue-100 relative">
+                            {/* Dynamic datalists for this specific row */}
+                            <datalist id={`variants-for-${idx}`}>
+                              {availableSizes.map((size: any) => <option key={size} value={size} />)}
+                            </datalist>
+                            <datalist id={`costs-for-${idx}`}>
+                              {availableCosts.map((cost: any) => <option key={cost} value={cost} />)}
+                            </datalist>
+
                             <div className="flex-1 space-y-1">
                               <Label className="text-xs text-gray-500 font-bold">اسم المنتج</Label>
                               <Input 
-                                type="text" className="h-10 text-sm" 
+                                type="text" list="inventory-products" className="h-10 text-sm" 
                                 value={item.productName} onChange={e => handleItemChange(idx, "productName", e.target.value)}
                                 placeholder="مثال: تيشيرت صيفي"
                               />
@@ -509,7 +572,7 @@ export default function SupplierDetailsPage() {
                             <div className="w-full sm:w-28 space-y-1">
                               <Label className="text-xs text-gray-500 font-bold">الصنف/النوع</Label>
                               <Input 
-                                type="text" className="h-10 text-sm text-center" 
+                                type="text" list={`variants-for-${idx}`} className="h-10 text-sm text-center" 
                                 value={item.variantName} onChange={e => handleItemChange(idx, "variantName", e.target.value)}
                                 placeholder="مثال: L"
                               />
@@ -517,26 +580,29 @@ export default function SupplierDetailsPage() {
                             <div className="w-full sm:w-20 space-y-1">
                               <Label className="text-xs text-gray-500 font-bold">الكمية</Label>
                               <Input 
-                                type="number" min="1" dir="ltr" className="h-10 text-center" 
+                                type="number" min="1" className="h-10 text-center font-bold text-lg text-blue-700 bg-blue-50/50" 
                                 value={item.quantity} onChange={e => handleItemChange(idx, "quantity", e.target.value)}
-                                placeholder="0"
+                                onWheel={(e) => (e.target as HTMLElement).blur()}
                               />
                             </div>
                             <div className="w-full sm:w-24 space-y-1">
                               <Label className="text-xs text-gray-500 font-bold">السعر (ج.م)</Label>
                               <Input 
-                                type="number" min="0" dir="ltr" className="h-10 text-center" 
+                                type="number" min="0" list={`costs-for-${idx}`} className="h-10 text-center text-sm" dir="ltr"
                                 value={item.unitCost} onChange={e => handleItemChange(idx, "unitCost", e.target.value)}
-                                placeholder="0"
+                                onWheel={(e) => (e.target as HTMLElement).blur()}
                               />
                             </div>
-                            <div className="flex items-end justify-center pt-2 sm:pt-0">
-                              <Button type="button" variant="ghost" size="icon" className="text-red-400 hover:text-red-600 hover:bg-red-50 h-10 w-10" onClick={() => removePurchaseItem(idx)}>
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
+                            {purchaseItems.length > 1 && (
+                              <div className="flex items-end justify-center pt-2 sm:pt-0">
+                                <Button type="button" variant="ghost" size="icon" className="text-red-400 hover:text-red-600 hover:bg-red-50 h-10 w-10" onClick={() => removePurchaseItem(idx)}>
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            )}
                           </div>
-                        ))}
+                          );
+                        })}
                         <Button type="button" variant="outline" size="sm" onClick={addPurchaseItem} className="w-full border-dashed text-indigo-600 border-indigo-200 hover:bg-indigo-50 font-bold">
                           <Plus className="w-4 h-4 ml-2" />
                           إضافة منتج آخر للفاتورة
@@ -577,6 +643,7 @@ export default function SupplierDetailsPage() {
                               <Input 
                                 type="number" min="1" dir="ltr" className="h-10 text-center border-red-100 focus-visible:ring-red-200" 
                                 value={item.quantity} onChange={e => handleReturnItemChange(idx, "quantity", e.target.value)}
+                                onWheel={(e) => (e.target as HTMLElement).blur()}
                                 placeholder="0"
                               />
                             </div>
@@ -585,6 +652,7 @@ export default function SupplierDetailsPage() {
                               <Input 
                                 type="number" min="0" dir="ltr" className="h-10 text-center border-red-100 focus-visible:ring-red-200" 
                                 value={item.unitCost} onChange={e => handleReturnItemChange(idx, "unitCost", e.target.value)}
+                                onWheel={(e) => (e.target as HTMLElement).blur()}
                                 placeholder="0"
                               />
                             </div>
@@ -609,7 +677,7 @@ export default function SupplierDetailsPage() {
                       </h4>
                       <div className="space-y-2">
                         <Label htmlFor="paidAmount" className="text-sm font-bold text-gray-700">المبلغ المدفوع (ج.م)</Label>
-                        <Input id="paidAmount" type="number" min="0" dir="ltr" className="h-12 rounded-xl text-lg font-bold bg-white border-green-100 focus-visible:ring-green-200" value={paidAmount} onChange={e => setPaidAmount(e.target.value)} placeholder="0" />
+                        <Input id="paidAmount" type="number" min="0" dir="ltr" className="h-12 rounded-xl text-lg font-bold bg-white border-green-100 focus-visible:ring-green-200" value={paidAmount} onChange={e => setPaidAmount(e.target.value)} onWheel={(e) => (e.target as HTMLElement).blur()} placeholder="0" />
                       </div>
                     </div>
 
@@ -742,39 +810,41 @@ export default function SupplierDetailsPage() {
                         ) : <span className="text-gray-300">-</span>}
                       </TableCell>
                       <TableCell className="align-middle text-center">
-                        {group.items && group.items.length > 0 ? (
-                          <Dialog>
-                            <DialogTrigger render={<Button variant="ghost" size="icon" className="text-indigo-600 hover:bg-indigo-50" />}>
-                              <FileText className="w-5 h-5" />
-                            </DialogTrigger>
-                            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto flex flex-col" dir="rtl">
-                              <DialogHeader>
-                                <DialogTitle>تفاصيل المنتجات</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-                                {group.items.map((item: any, i: number) => (
-                                  <div key={i} className={`flex justify-between items-center p-3 text-sm rounded-lg border ${item.type === 'return' ? 'bg-red-50/50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
-                                    <div>
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-bold">{item.product_variants?.products?.name || "منتج محذوف"}</span>
-                                        {item.type === 'return' && <span className="bg-red-100 text-red-800 text-[10px] px-2 py-0.5 rounded-full font-bold">مرتجع</span>}
+                        <div className="flex items-center justify-center gap-2">
+                          {group.items && group.items.length > 0 ? (
+                            <Dialog>
+                              <DialogTrigger render={<Button variant="ghost" size="icon" className="text-indigo-600 hover:bg-indigo-50" />}>
+                                <FileText className="w-5 h-5" />
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto flex flex-col" dir="rtl">
+                                <DialogHeader>
+                                  <DialogTitle>تفاصيل المنتجات</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                                  {group.items.map((item: any, i: number) => (
+                                    <div key={i} className={`flex justify-between items-center p-3 text-sm rounded-lg border ${item.type === 'return' ? 'bg-red-50/50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
+                                      <div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-bold">{item.product_variants?.products?.name || "منتج محذوف"}</span>
+                                          {item.type === 'return' && <span className="bg-red-100 text-red-800 text-[10px] px-2 py-0.5 rounded-full font-bold">مرتجع</span>}
+                                        </div>
+                                        <p className="text-gray-500 text-xs mt-1">{item.product_variants?.size || "-"}</p>
                                       </div>
-                                      <p className="text-gray-500 text-xs mt-1">{item.product_variants?.size || "-"}</p>
+                                      <div className="text-left">
+                                        <p dir="ltr">{Math.abs(item.quantity)} x {item.unit_cost} ج.م</p>
+                                        <p className={`font-bold ${item.type === 'return' ? 'text-red-600' : 'text-blue-600'}`} dir="ltr">
+                                          {(Math.abs(item.quantity) * item.unit_cost).toLocaleString()} ج.م
+                                        </p>
+                                      </div>
                                     </div>
-                                    <div className="text-left">
-                                      <p dir="ltr">{Math.abs(item.quantity)} x {item.unit_cost} ج.م</p>
-                                      <p className={`font-bold ${item.type === 'return' ? 'text-red-600' : 'text-blue-600'}`} dir="ltr">
-                                        {(Math.abs(item.quantity) * item.unit_cost).toLocaleString()} ج.م
-                                      </p>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        ) : (
-                          <span className="text-gray-300">-</span>
-                        )}
+                                  ))}
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          ) : (
+                            <span className="text-gray-300">-</span>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
