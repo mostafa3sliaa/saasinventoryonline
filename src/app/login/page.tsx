@@ -55,6 +55,7 @@ export default function LoginPage() {
           email: submitEmail,
           password: submitPassword,
           options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
             data: {
               full_name: fullName,
               plan_choice: planChoice,
