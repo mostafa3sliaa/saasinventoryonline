@@ -40,14 +40,17 @@ export default function LoginPage() {
          submitPassword = submitPassword + '123456';
       }
 
+      let authData = null;
+
       if (isLogin) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
           email: submitEmail,
           password: submitPassword,
         });
         authError = signInError;
+        authData = data;
       } else {
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { data, error: signUpError } = await supabase.auth.signUp({
           email: submitEmail,
           password: submitPassword,
           options: {
@@ -58,6 +61,7 @@ export default function LoginPage() {
           }
         });
         authError = signUpError;
+        authData = data;
       }
 
       if (authError) {
@@ -65,8 +69,16 @@ export default function LoginPage() {
         toast.error(isLogin ? "فشل تسجيل الدخول" : "فشل إنشاء الحساب");
         setLoading(false);
       } else {
-        toast.success(isLogin ? "تم تسجيل الدخول بنجاح!" : "تم إنشاء الحساب بنجاح!");
-        router.push("/dashboard");
+        if (!isLogin && authData?.user && !authData?.session) {
+          // Email confirmation is required by Supabase settings
+          toast.success("تم التسجيل! يرجى مراجعة بريدك الإلكتروني لتفعيل الحساب.");
+          setError("يرجى مراجعة بريدك الإلكتروني لتفعيل الحساب قبل تسجيل الدخول.");
+          setLoading(false);
+          setIsLogin(true); // switch to login mode
+        } else {
+          toast.success(isLogin ? "تم تسجيل الدخول بنجاح!" : "تم إنشاء الحساب بنجاح!");
+          router.push("/dashboard");
+        }
       }
     } catch (err: any) {
       console.error("Login Exception:", err);
