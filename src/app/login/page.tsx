@@ -19,11 +19,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // OTP State
-  const [showOtpForm, setShowOtpForm] = useState(false);
-  const [otpCode, setOtpCode] = useState("");
-  const [otpLoading, setOtpLoading] = useState(false);
-
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -76,10 +71,11 @@ export default function LoginPage() {
         setLoading(false);
       } else {
         if (!isLogin && authData?.user && !authData?.session) {
-          // Email confirmation is required by Supabase settings (OTP Flow)
-          toast.success("تم إرسال كود التفعيل إلى بريدك الإلكتروني!");
+          // Email confirmation is required by Supabase settings (Magic Link Flow)
+          toast.success("تم التسجيل! يرجى مراجعة بريدك الإلكتروني والضغط على رابط التفعيل.");
+          setError("تم إرسال رابط التفعيل لبريدك. يرجى الضغط عليه لتفعيل حسابك ثم الدخول.");
           setLoading(false);
-          setShowOtpForm(true);
+          setIsLogin(true);
         } else {
           toast.success(isLogin ? "تم تسجيل الدخول بنجاح!" : "تم إنشاء الحساب بنجاح!");
           router.push("/dashboard");
@@ -89,38 +85,6 @@ export default function LoginPage() {
       console.error("Login Exception:", err);
       setError("حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.");
       setLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setOtpLoading(true);
-    setError(null);
-    const supabase = createClient();
-    
-    let submitEmail = email;
-    if (!submitEmail.includes('@')) {
-       submitEmail = `${submitEmail}@inventorysaas.com`;
-    }
-
-    try {
-      const { error } = await supabase.auth.verifyOtp({
-        email: submitEmail,
-        token: otpCode,
-        type: 'signup'
-      });
-
-      if (error) {
-        setError("الكود غير صحيح أو منتهي الصلاحية");
-        toast.error("الكود غير صحيح");
-        setOtpLoading(false);
-      } else {
-        toast.success("تم تفعيل الحساب والدخول بنجاح!");
-        router.push("/dashboard");
-      }
-    } catch (err: any) {
-      setError("حدث خطأ أثناء التفعيل");
-      setOtpLoading(false);
     }
   };
 
@@ -242,55 +206,14 @@ export default function LoginPage() {
 
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {showOtpForm ? "تأكيد البريد الإلكتروني" : (isLogin ? "مرحباً بعودتك" : "إنشاء حساب جديد")}
+              {isLogin ? "مرحباً بعودتك" : "إنشاء حساب جديد"}
             </h2>
             <p className="text-gray-500 text-sm">
-              {showOtpForm ? "أدخل الكود المكون من 6 أرقام المرسل إلى بريدك" : (isLogin ? "أدخل بياناتك للوصول إلى لوحة التحكم" : "سجّل شركتك لتبدأ في إدارة مخزونك")}
+              {isLogin ? "أدخل بياناتك للوصول إلى لوحة التحكم" : "سجّل شركتك لتبدأ في إدارة مخزونك"}
             </p>
           </div>
 
-          {showOtpForm ? (
-            <form onSubmit={handleVerifyOtp} className="space-y-5">
-              {error && (
-                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center border border-red-100">
-                  {error}
-                </div>
-              )}
-              <div className="space-y-2 text-right">
-                <Label htmlFor="otp" className="text-sm font-medium text-gray-700">كود التفعيل (OTP)</Label>
-                <Input
-                  id="otp"
-                  type="text"
-                  maxLength={6}
-                  placeholder="123456"
-                  value={otpCode}
-                  onChange={(e) => setOtpCode(e.target.value)}
-                  required
-                  dir="ltr"
-                  className="text-center tracking-widest text-2xl font-bold h-14 rounded-lg border-gray-200 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500"
-                />
-              </div>
-
-              <Button 
-                type="submit" 
-                className="w-full h-11 text-base font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors" 
-                disabled={otpLoading}
-              >
-                {otpLoading ? "جاري التحقق..." : "تأكيد الدخول"}
-              </Button>
-
-              <div className="text-center mt-4">
-                <button 
-                  type="button" 
-                  onClick={() => setShowOtpForm(false)}
-                  className="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
-                >
-                  العودة للتسجيل
-                </button>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-5">
             {error && (
               <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm text-center border border-red-100">
                 {error}
@@ -434,7 +357,6 @@ export default function LoginPage() {
               الدخول باستخدام Google
             </Button>
           </form>
-          )}
         </div>
       </div>
     </div>
