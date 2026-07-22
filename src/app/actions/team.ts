@@ -67,8 +67,8 @@ export async function addTeamMember({
 
   if (!newAuthUser.user) return { success: false, error: "فشل إنشاء الحساب" };
 
-  // 2. Insert into public.users
-  const { error: dbErr } = await adminClient.from("users").insert({
+  // 2. Insert or update into public.users (in case a DB trigger already created the row)
+  const { error: dbErr } = await adminClient.from("users").upsert({
     id: newAuthUser.user.id,
     tenant_id: tenantId,
     email: email,
