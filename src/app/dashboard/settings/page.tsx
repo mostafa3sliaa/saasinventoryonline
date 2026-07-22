@@ -198,7 +198,7 @@ export default function SettingsPage() {
          return;
       }
 
-      await addTeamMember({
+      const res = await addTeamMember({
         tenantId: tenant.id,
         fullName: newUserName,
         email: newUserEmail,
@@ -206,6 +206,10 @@ export default function SettingsPage() {
         role: newUserRole,
         pages: newUserPages
       });
+
+      if (!res.success) {
+        throw new Error(res.error);
+      }
 
       logActivity(supabase, tenant?.id!, currentUser?.id!, "إضافة مستخدم جديد", "user");
       toast.success("تم إضافة المستخدم بنجاح!");

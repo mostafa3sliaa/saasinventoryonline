@@ -27,7 +27,7 @@ export async function addTeamMember({
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("غير مصرح لك");
+  if (!user) return { success: false, error: "غير مصرح لك" };
 
   // Verify the current user is an admin of the tenant
   const adminClient = createSupabaseAdmin(
@@ -42,7 +42,7 @@ export async function addTeamMember({
     .single();
 
   if (!currentUserRecord || currentUserRecord.tenant_id !== tenantId || currentUserRecord.role !== "admin") {
-    throw new Error("يجب أن تكون مديراً لإضافة مستخدمين");
+    return { success: false, error: "يجب أن تكون مديراً لإضافة مستخدمين" };
   }
 
   // 1. Create auth user bypassing email confirmation
@@ -60,12 +60,12 @@ export async function addTeamMember({
 
   if (authErr) {
     if (authErr.message.includes("already registered")) {
-      throw new Error("البريد الإلكتروني مستخدم بالفعل في النظام");
+      return { success: false, error: "البريد الإلكتروني مستخدم بالفعل في النظام" };
     }
-    throw new Error(authErr.message);
+    return { success: false, error: authErr.message };
   }
 
-  if (!newAuthUser.user) throw new Error("فشل إنشاء الحساب");
+  if (!newAuthUser.user) return { success: false, error: "فشل إنشاء الحساب" };
 
   // 2. Insert into public.users
   const { error: dbErr } = await adminClient.from("users").insert({
@@ -80,8 +80,8 @@ export async function addTeamMember({
   if (dbErr) {
     // rollback auth user if db fails
     await adminClient.auth.admin.deleteUser(newAuthUser.user.id);
-    throw new Error(dbErr.message);
+    return { success: false, error: dbErr.message };
   }
 
-  return true;
+  return { success: true };
 }
