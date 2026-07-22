@@ -228,7 +228,7 @@ export default function LoginPage() {
                   <Input
                     id="fullName"
                     type="text"
-                    placeholder="مؤسسة التقنية"
+                    placeholder="أدخل اسمك أو اسم شركتك"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     required={!isLogin}
@@ -293,7 +293,7 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="text"
-                placeholder="bobos"
+                placeholder="أدخل الإيميل أو اسم المستخدم"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -306,6 +306,7 @@ export default function LoginPage() {
               <Input
                 id="password"
                 type="password"
+                placeholder="أدخل كلمة المرور"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
