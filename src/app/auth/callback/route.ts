@@ -93,6 +93,10 @@ export async function GET(request: Request) {
             email: authData.user.email,
             role: 'admin',
           });
+        } else {
+          // If tenant creation failed (e.g. missing ENV keys on Vercel), cleanup and error
+          await adminClient.auth.admin.deleteUser(authData.user.id);
+          return NextResponse.redirect(`${origin}/login?error=server_error`);
         }
       }
       

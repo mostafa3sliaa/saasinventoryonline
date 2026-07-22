@@ -29,6 +29,9 @@ export default function LoginPage() {
       setIsLogin(false);
       setError("عذراً، هذا الحساب غير مسجل لدينا. يرجى اختيار الباقة أولاً لإنشاء حساب شركتك.");
       toast.error("يرجى اختيار الباقة أولاً");
+    } else if (params.get("error") === "server_error") {
+      setError("حدث خطأ في الخادم أثناء إنشاء الحساب. تأكد من إعدادات Vercel و Supabase.");
+      toast.error("فشل إنشاء الحساب");
     }
   }, []);
 
