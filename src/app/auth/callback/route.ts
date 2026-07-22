@@ -33,8 +33,51 @@ export async function GET(request: Request) {
       }
     )
     
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) {
+    const { data: authData, error } = await supabase.auth.exchangeCodeForSession(code)
+    
+    if (!error && authData?.user) {
+      // Check if user exists in public.users (i.e. has a tenant)
+      const adminClient = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        {
+          cookies: {
+            getAll() { return cookieStore.getAll() },
+            setAll() {}
+          }
+        }
+      );
+      
+      const { data: existingUser } = await adminClient
+        .from('users')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single();
+        
+      if (!existingUser) {
+        // Create a new tenant for the OAuth user
+        const { data: newTenant, error: tenantErr } = await adminClient
+          .from('tenants')
+          .insert({
+            name: authData.user.user_metadata?.full_name || 'شركة جديدة',
+            subscription_plan: 'trial',
+            account_status: 'active',
+            trial_ends_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+          })
+          .select()
+          .single();
+          
+        if (newTenant) {
+          // Create the public user
+          await adminClient.from('users').insert({
+            id: authData.user.id,
+            tenant_id: newTenant.id,
+            email: authData.user.email,
+            role: 'admin',
+          });
+        }
+      }
+      
       return NextResponse.redirect(`${origin}${next}`)
     }
   }
