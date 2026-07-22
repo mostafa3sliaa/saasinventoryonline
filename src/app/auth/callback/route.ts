@@ -60,10 +60,11 @@ export async function GET(request: Request) {
         // If they are a new user, they MUST have explicitly chosen a plan
         const validPlans = ['trial', 'basic', 'pro'];
         if (!planParam || !validPlans.includes(planParam)) {
-          // Clean up the automatically created auth user (which should cascade to public.users)
-          await adminClient.auth.admin.deleteUser(authData.user.id);
-          // Just in case cascade is off, delete from public.users too
+          // Delete from public.users first to avoid Foreign Key constraint errors if CASCADE is not enabled
           await adminClient.from('users').delete().eq('id', authData.user.id);
+          
+          // Then clean up the auth user
+          await adminClient.auth.admin.deleteUser(authData.user.id);
           
           // Redirect them back to choose a plan
           return NextResponse.redirect(`${origin}/login?error=must_choose_plan`);
