@@ -56,11 +56,15 @@ export async function GET(request: Request) {
         .eq('id', authData.user.id)
         .single();
         
-      if (!existingUser) {
+      // A user is considered "new" if they don't exist OR if they exist but have no tenant_id (due to a DB trigger)
+      if (!existingUser || !existingUser.tenant_id) {
         // If the user clicked "Login" but they don't actually have an account
         if (isLoginParam === 'true') {
-          // Clean up the automatically created auth user
+          // Clean up the automatically created auth user (which should cascade to public.users)
           await adminClient.auth.admin.deleteUser(authData.user.id);
+          // Just in case cascade is off, delete from public.users too
+          await adminClient.from('users').delete().eq('id', authData.user.id);
+          
           // Redirect them back to choose a plan
           return NextResponse.redirect(`${origin}/login?error=must_choose_plan`);
         }
