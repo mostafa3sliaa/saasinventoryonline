@@ -8,6 +8,7 @@ export async function GET(request: Request) {
   // if "next" is in param, use it as the redirect URL
   const next = searchParams.get('next') ?? '/dashboard'
   const planParam = searchParams.get('plan')
+  const isLoginParam = searchParams.get('isLogin')
 
   if (code) {
     const cookieStore = await cookies()
@@ -56,6 +57,14 @@ export async function GET(request: Request) {
         .single();
         
       if (!existingUser) {
+        // If the user clicked "Login" but they don't actually have an account
+        if (isLoginParam === 'true') {
+          // Clean up the automatically created auth user
+          await adminClient.auth.admin.deleteUser(authData.user.id);
+          // Redirect them back to choose a plan
+          return NextResponse.redirect(`${origin}/login?error=must_choose_plan`);
+        }
+
         // Determine plan and status
         const requestedPlan = planParam || authData.user.user_metadata?.plan_choice || 'trial';
         const finalStatus = requestedPlan === 'trial' ? 'active' : 'pending';
@@ -74,7 +83,7 @@ export async function GET(request: Request) {
           
         if (newTenant) {
           // Create the public user
-          await adminClient.from('users').insert({
+          await adminClient.from('users').upsert({
             id: authData.user.id,
             tenant_id: newTenant.id,
             email: authData.user.email,

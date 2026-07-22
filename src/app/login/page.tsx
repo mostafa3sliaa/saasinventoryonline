@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import React from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -20,6 +21,16 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   const router = useRouter();
+
+  // Handle URL errors on load
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("error") === "must_choose_plan") {
+      setIsLogin(false);
+      setError("عذراً، هذا الحساب غير مسجل لدينا. يرجى اختيار الباقة أولاً لإنشاء حساب شركتك.");
+      toast.error("يرجى اختيار الباقة أولاً");
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +83,7 @@ export default function LoginPage() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?plan=${planChoice}`,
+        redirectTo: `${window.location.origin}/auth/callback?plan=${planChoice}&isLogin=${isLogin}`,
       },
     });
   };
