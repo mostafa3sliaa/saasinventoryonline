@@ -7,6 +7,7 @@ export async function GET(request: Request) {
   const code = searchParams.get('code')
   // if "next" is in param, use it as the redirect URL
   const next = searchParams.get('next') ?? '/dashboard'
+  const planParam = searchParams.get('plan')
 
   if (code) {
     const cookieStore = await cookies()
@@ -55,13 +56,17 @@ export async function GET(request: Request) {
         .single();
         
       if (!existingUser) {
+        // Determine plan and status
+        const requestedPlan = planParam || authData.user.user_metadata?.plan_choice || 'trial';
+        const finalStatus = requestedPlan === 'trial' ? 'active' : 'pending';
+
         // Create a new tenant for the OAuth user
         const { data: newTenant, error: tenantErr } = await adminClient
           .from('tenants')
           .insert({
-            name: authData.user.user_metadata?.full_name || 'شركة جديدة',
-            subscription_plan: 'trial',
-            account_status: 'active',
+            name: authData.user.user_metadata?.full_name || authData.user.user_metadata?.name || 'شركة جديدة',
+            subscription_plan: requestedPlan,
+            account_status: finalStatus,
             trial_ends_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
           })
           .select()
