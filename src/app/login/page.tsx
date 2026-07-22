@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [planChoice, setPlanChoice] = useState("trial");
+  const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,9 +94,10 @@ export default function LoginPage() {
             أدر مخزونك، طلباتك، ومبيعاتك بكل سهولة واحترافية من مكان واحد.
           </p>
 
-          <div className="text-right bg-white/10 backdrop-blur-md p-6 rounded-3xl border border-white/20 shadow-xl mt-8">
-            <Label className="text-2xl font-bold text-white block mb-6 text-center">للمستخدمين الجدد: اختر باقتك ثم سجل بجوجل</Label>
-            <div className="grid grid-cols-3 gap-6">
+          {!isLogin && (
+            <div className="text-right bg-white/10 backdrop-blur-md p-6 rounded-3xl border border-white/20 shadow-xl mt-8">
+              <Label className="text-2xl font-bold text-white block mb-6 text-center">اختر باقتك</Label>
+              <div className="grid grid-cols-3 gap-6">
                 {/* Trial */}
                 <div
                   role="button"
@@ -167,6 +169,7 @@ export default function LoginPage() {
                 </div>
               </div>
             </div>
+          )}
         </div>
       </div>
 
@@ -182,10 +185,10 @@ export default function LoginPage() {
 
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              تسجيل الدخول
+              {isLogin ? "تسجيل الدخول" : "إنشاء حساب شركة جديدة"}
             </h2>
             <p className="text-gray-500 text-sm">
-              أدخل بياناتك أو استخدم جوجل للوصول لحسابك
+              {isLogin ? "أدخل بياناتك أو استخدم جوجل للوصول لحسابك" : "اختر باقتك وسجل حساب شركتك فوراً باستخدام جوجل"}
             </p>
           </div>
 
@@ -196,9 +199,10 @@ export default function LoginPage() {
               </div>
             )}
             
-            <div className="space-y-3 pt-2 text-right lg:hidden mb-6">
-              <Label className="text-sm font-bold text-gray-900">للمستخدمين الجدد: اختر باقتك وسجل بجوجل</Label>
-              <div className="grid grid-cols-1 gap-3">
+            {!isLogin && (
+              <div className="space-y-3 pt-2 text-right lg:hidden mb-6">
+                <Label className="text-sm font-bold text-gray-900">اختر باقتك</Label>
+                <div className="grid grid-cols-1 gap-3">
                 <button
                   type="button"
                   onClick={() => setPlanChoice('trial')}
@@ -231,42 +235,60 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+            )}
             
-            <div className="space-y-2 text-right">
-              <Label htmlFor="email" className="text-sm font-medium text-gray-700">البريد الإلكتروني</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="أدخل بريدك الإلكتروني (مثل: ahmed@example.com)"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                pattern="^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.com$"
-                title="يجب أن يكون بريداً إلكترونياً صحيحاً وينتهي بـ .com"
-                required
-                className="text-right h-11 rounded-lg border-gray-200 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500"
-              />
-            </div>
+            {isLogin && (
+              <>
+                <div className="space-y-2 text-right">
+                  <Label htmlFor="email" className="text-sm font-medium text-gray-700">البريد الإلكتروني</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="أدخل بريدك الإلكتروني"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    pattern="^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.com$"
+                    title="يجب أن يكون بريداً إلكترونياً صحيحاً وينتهي بـ .com"
+                    required
+                    className="text-right h-11 rounded-lg border-gray-200 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500"
+                  />
+                </div>
 
-            <div className="space-y-2 text-right">
-              <Label htmlFor="password" className="text-sm font-medium text-gray-700">كلمة المرور</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="أدخل كلمة المرور"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="text-right h-11 rounded-lg border-gray-200 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500"
-              />
-            </div>
+                <div className="space-y-2 text-right">
+                  <Label htmlFor="password" className="text-sm font-medium text-gray-700">كلمة المرور</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="أدخل كلمة المرور"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="text-right h-11 rounded-lg border-gray-200 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500"
+                  />
+                </div>
 
-            <Button 
-              type="submit" 
-              className="w-full h-11 text-base font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors" 
-              disabled={loading}
-            >
-              {loading ? "جاري المعالجة..." : "تسجيل الدخول (للموظفين)"}
-            </Button>
+                <Button 
+                  type="submit" 
+                  className="w-full h-11 text-base font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors" 
+                  disabled={loading}
+                >
+                  {loading ? "جاري المعالجة..." : "تسجيل الدخول"}
+                </Button>
+              </>
+            )}
+
+            <div className="text-center mt-2 mb-4">
+              <button 
+                type="button" 
+                className="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+                onClick={() => {
+                  setIsLogin(!isLogin);
+                  setError(null);
+                }}
+              >
+                {isLogin ? "ليس لديك حساب؟ سجل شركتك الآن" : "لديك حساب بالفعل؟ تسجيل الدخول"}
+              </button>
+            </div>
 
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
