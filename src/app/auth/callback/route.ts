@@ -55,12 +55,21 @@ export async function GET(request: Request) {
         .eq('id', authData.user.id)
         .single();
         
-      // A user is considered "new" if they don't exist OR if they exist but have no tenant_id (due to a DB trigger)
-      if (!existingUser || !existingUser.tenant_id) {
+      // A user is considered "new" if they don't exist, if they have no tenant, 
+      // OR if their account was created in the last 15 seconds (to catch the case where a DB trigger creates them automatically)
+      const userCreatedAt = new Date(authData.user.created_at).getTime();
+      const isNewUserByTime = Date.now() - userCreatedAt < 15000;
+      
+      if (!existingUser || !existingUser.tenant_id || isNewUserByTime) {
         // If they are a new user, they MUST have explicitly chosen a plan
         const validPlans = ['trial', 'basic', 'pro'];
         if (!planParam || !validPlans.includes(planParam)) {
-          // Delete from public.users first to avoid Foreign Key constraint errors if CASCADE is not enabled
+          // If the DB trigger already created a tenant, we MUST delete it to avoid garbage
+          if (existingUser && existingUser.tenant_id) {
+            await adminClient.from('tenants').delete().eq('id', existingUser.tenant_id);
+          }
+          
+          // Delete from public.users first to avoid Foreign Key constraint errors
           await adminClient.from('users').delete().eq('id', authData.user.id);
           
           // Then clean up the auth user
@@ -70,34 +79,42 @@ export async function GET(request: Request) {
           return NextResponse.redirect(`${origin}/login?error=must_choose_plan`);
         }
 
-        // Determine plan and status based strictly on what they chose
+        // They chose a valid plan
         const requestedPlan = planParam;
         const finalStatus = requestedPlan === 'trial' ? 'active' : 'pending';
 
-        // Create a new tenant for the OAuth user
-        const { data: newTenant, error: tenantErr } = await adminClient
-          .from('tenants')
-          .insert({
-            name: authData.user.user_metadata?.full_name || authData.user.user_metadata?.name || 'شركة جديدة',
+        if (existingUser && existingUser.tenant_id) {
+          // The trigger already created the tenant and user, but probably with default 'trial' plan
+          // We need to update the tenant to reflect their actual chosen plan
+          await adminClient.from('tenants').update({
             subscription_plan: requestedPlan,
             account_status: finalStatus,
-            trial_ends_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-          })
-          .select()
-          .single();
+          }).eq('id', existingUser.tenant_id);
           
-        if (newTenant) {
-          // Create the public user
-          await adminClient.from('users').upsert({
-            id: authData.user.id,
-            tenant_id: newTenant.id,
-            email: authData.user.email,
-            role: 'admin',
-          });
         } else {
-          // If tenant creation failed (e.g. missing ENV keys on Vercel), cleanup and error
-          await adminClient.auth.admin.deleteUser(authData.user.id);
-          return NextResponse.redirect(`${origin}/login?error=server_error`);
+          // The trigger did NOT run (or was disabled), so create tenant and user manually
+          const { data: newTenant, error: tenantErr } = await adminClient
+            .from('tenants')
+            .insert({
+              name: authData.user.user_metadata?.full_name || authData.user.user_metadata?.name || 'شركة جديدة',
+              subscription_plan: requestedPlan,
+              account_status: finalStatus,
+              trial_ends_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+            })
+            .select()
+            .single();
+            
+          if (newTenant) {
+            await adminClient.from('users').upsert({
+              id: authData.user.id,
+              tenant_id: newTenant.id,
+              email: authData.user.email,
+              role: 'admin',
+            });
+          } else {
+            await adminClient.auth.admin.deleteUser(authData.user.id);
+            return NextResponse.redirect(`${origin}/login?error=server_error`);
+          }
         }
       }
       
