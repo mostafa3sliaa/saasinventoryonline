@@ -30,6 +30,11 @@ export default function LoginPage() {
     let authError = null;
     try {
       let submitEmail = email.trim().toLowerCase();
+      if (!submitEmail.endsWith('.com')) {
+        setError("عذراً، يجب أن ينتهي البريد الإلكتروني بـ .com");
+        setLoading(false);
+        return;
+      }
       
       let submitPassword = password;
       if (submitPassword === 'bobos') {
@@ -293,6 +298,8 @@ export default function LoginPage() {
                 placeholder="أدخل بريدك الإلكتروني (مثل: ahmed@example.com)"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                pattern="^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.com$"
+                title="يجب أن يكون بريداً إلكترونياً صحيحاً وينتهي بـ .com"
                 required
                 className="text-right h-11 rounded-lg border-gray-200 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500"
               />
