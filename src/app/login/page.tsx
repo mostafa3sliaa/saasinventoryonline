@@ -15,7 +15,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [planChoice, setPlanChoice] = useState("trial");
-  const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,44 +44,20 @@ export default function LoginPage() {
 
       let authData = null;
 
-      if (isLogin) {
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email: submitEmail,
-          password: submitPassword,
-        });
-        authError = signInError;
-        authData = data;
-      } else {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email: submitEmail,
-          password: submitPassword,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-            data: {
-              full_name: fullName,
-              plan_choice: planChoice,
-            }
-          }
-        });
-        authError = signUpError;
-        authData = data;
-      }
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: submitEmail,
+        password: submitPassword,
+      });
+      authError = signInError;
+      authData = data;
 
       if (authError) {
-        setError(isLogin ? "البريد الإلكتروني أو كلمة المرور غير صحيحة" : authError.message);
-        toast.error(isLogin ? "فشل تسجيل الدخول" : "فشل إنشاء الحساب");
+        setError("البريد الإلكتروني أو كلمة المرور غير صحيحة");
+        toast.error("فشل تسجيل الدخول");
         setLoading(false);
       } else {
-        if (!isLogin && authData?.user && !authData?.session) {
-          // Email confirmation is required by Supabase settings (Magic Link Flow)
-          toast.success("تم التسجيل! يرجى مراجعة بريدك الإلكتروني والضغط على رابط التفعيل.");
-          setError("تم إرسال رابط التفعيل لبريدك. يرجى الضغط عليه لتفعيل حسابك ثم الدخول.");
-          setLoading(false);
-          setIsLogin(true);
-        } else {
-          toast.success(isLogin ? "تم تسجيل الدخول بنجاح!" : "تم إنشاء الحساب بنجاح!");
-          router.push("/dashboard");
-        }
+        toast.success("تم تسجيل الدخول بنجاح!");
+        router.push("/dashboard");
       }
     } catch (err: any) {
       console.error("Login Exception:", err);
@@ -118,10 +93,9 @@ export default function LoginPage() {
             أدر مخزونك، طلباتك، ومبيعاتك بكل سهولة واحترافية من مكان واحد.
           </p>
 
-          {!isLogin && (
-            <div className="text-right bg-white/10 backdrop-blur-md p-6 rounded-3xl border border-white/20 shadow-xl mt-8">
-              <Label className="text-2xl font-bold text-white block mb-6 text-center">اختر باقتك</Label>
-              <div className="grid grid-cols-3 gap-6">
+          <div className="text-right bg-white/10 backdrop-blur-md p-6 rounded-3xl border border-white/20 shadow-xl mt-8">
+            <Label className="text-2xl font-bold text-white block mb-6 text-center">للمستخدمين الجدد: اختر باقتك ثم سجل بجوجل</Label>
+            <div className="grid grid-cols-3 gap-6">
                 {/* Trial */}
                 <div
                   role="button"
@@ -193,7 +167,6 @@ export default function LoginPage() {
                 </div>
               </div>
             </div>
-          )}
         </div>
       </div>
 
@@ -209,10 +182,10 @@ export default function LoginPage() {
 
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              {isLogin ? "مرحباً بعودتك" : "إنشاء حساب جديد"}
+              تسجيل الدخول
             </h2>
             <p className="text-gray-500 text-sm">
-              {isLogin ? "أدخل بياناتك للوصول إلى لوحة التحكم" : "سجّل شركتك لتبدأ في إدارة مخزونك"}
+              أدخل بياناتك أو استخدم جوجل للوصول لحسابك
             </p>
           </div>
 
@@ -223,72 +196,41 @@ export default function LoginPage() {
               </div>
             )}
             
-            {!isLogin && (
-              <>
-                <div className="space-y-2 text-right">
-                  <Label htmlFor="fullName" className="text-sm font-medium text-gray-700">الاسم الكامل (أو اسم الشركة)</Label>
-                  <Input
-                    id="fullName"
-                    type="text"
-                    placeholder="أدخل اسمك أو اسم شركتك"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    required={!isLogin}
-                    className="text-right h-11 rounded-lg border-gray-200 focus-visible:ring-indigo-500/20 focus-visible:border-indigo-500"
-                  />
-                </div>
-
-                <div className="space-y-3 pt-2 text-right lg:hidden">
-                  <Label className="text-sm font-bold text-gray-900">اختر باقتك</Label>
-                  <div className="grid grid-cols-1 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setPlanChoice('trial')}
-                      className={`relative flex flex-col items-start p-4 rounded-xl border-2 transition-all ${
-                        planChoice === 'trial' ? 'border-indigo-600 bg-indigo-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between w-full mb-1">
-                        <span className={`font-bold ${planChoice === 'trial' ? 'text-indigo-900' : 'text-gray-900'}`}>التجربة المجانية</span>
-                        <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-full">5 أيام</span>
-                      </div>
-                      <span className="text-xs text-gray-500">جرب النظام بالكامل مجاناً بدون بطاقة ائتمان</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setPlanChoice('basic')}
-                      className={`relative flex flex-col items-start p-4 rounded-xl border-2 transition-all ${
-                        planChoice === 'basic' ? 'border-indigo-600 bg-indigo-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between w-full mb-1">
-                        <span className={`font-bold ${planChoice === 'basic' ? 'text-indigo-900' : 'text-gray-900'}`}>الباقة الأساسية</span>
-                        <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">499 ج.م</span>
-                      </div>
-                      <span className="text-xs text-gray-500">للمتاجر المبتدئة (حتى 500 طلب/شهر)</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setPlanChoice('pro')}
-                      className={`relative flex flex-col items-start p-4 rounded-xl border-2 transition-all ${
-                        planChoice === 'pro' ? 'border-indigo-600 bg-indigo-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'
-                      }`}
-                    >
-                      <div className="absolute -top-3 left-4 bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
-                        الأكثر مبيعاً
-                      </div>
-                      <div className="flex items-center justify-between w-full mb-1">
-                        <span className={`font-bold ${planChoice === 'pro' ? 'text-indigo-900' : 'text-gray-900'}`}>الباقة الاحترافية</span>
-                        <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">999 ج.م</span>
-                      </div>
-                      <span className="text-xs text-gray-500">للشركات والمتاجر (ميزات الذكاء الاصطناعي)</span>
-                    </button>
+            <div className="space-y-3 pt-2 text-right lg:hidden mb-6">
+              <Label className="text-sm font-bold text-gray-900">للمستخدمين الجدد: اختر باقتك وسجل بجوجل</Label>
+              <div className="grid grid-cols-1 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPlanChoice('trial')}
+                  className={`relative flex flex-col items-start p-4 rounded-xl border-2 transition-all ${
+                    planChoice === 'trial' ? 'border-indigo-600 bg-indigo-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full mb-1">
+                    <span className={`font-bold ${planChoice === 'trial' ? 'text-indigo-900' : 'text-gray-900'}`}>التجربة المجانية</span>
+                    <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-full">5 أيام</span>
                   </div>
-                </div>
-              </>
-            )}
+                  <span className="text-xs text-gray-500">جرب النظام بالكامل مجاناً</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPlanChoice('pro')}
+                  className={`relative flex flex-col items-start p-4 rounded-xl border-2 transition-all ${
+                    planChoice === 'pro' ? 'border-indigo-600 bg-indigo-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'
+                  }`}
+                >
+                  <div className="absolute -top-3 left-4 bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+                    الأكثر مبيعاً
+                  </div>
+                  <div className="flex items-center justify-between w-full mb-1">
+                    <span className={`font-bold ${planChoice === 'pro' ? 'text-indigo-900' : 'text-gray-900'}`}>الباقة الاحترافية</span>
+                    <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">999 ج.م</span>
+                  </div>
+                  <span className="text-xs text-gray-500">للشركات والمتاجر الاحترافية</span>
+                </button>
+              </div>
+            </div>
             
             <div className="space-y-2 text-right">
               <Label htmlFor="email" className="text-sm font-medium text-gray-700">البريد الإلكتروني</Label>
@@ -323,21 +265,8 @@ export default function LoginPage() {
               className="w-full h-11 text-base font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors" 
               disabled={loading}
             >
-              {loading ? "جاري المعالجة..." : (isLogin ? "تسجيل الدخول" : "إنشاء الحساب")}
+              {loading ? "جاري المعالجة..." : "تسجيل الدخول (للموظفين)"}
             </Button>
-
-            <div className="text-center mt-2 mb-4">
-              <button 
-                type="button" 
-                className="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
-                onClick={() => {
-                  setIsLogin(!isLogin);
-                  setError(null);
-                }}
-              >
-                {isLogin ? "ليس لديك حساب؟ سجل الآن" : "لديك حساب بالفعل؟ تسجيل الدخول"}
-              </button>
-            </div>
 
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
