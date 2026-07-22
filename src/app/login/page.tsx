@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
-  const [planChoice, setPlanChoice] = useState("trial");
+  const [planChoice, setPlanChoice] = useState("");
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,11 +79,17 @@ export default function LoginPage() {
   };
 
   const handleGoogleLogin = async () => {
+    if (!isLogin && !planChoice) {
+      toast.error("يرجى اختيار الباقة أولاً قبل التسجيل");
+      setError("يرجى النقر على إحدى الباقات لاختيارها قبل المتابعة");
+      return;
+    }
+
     const supabase = createClient();
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?plan=${planChoice}&isLogin=${isLogin}`,
+        redirectTo: `${window.location.origin}/auth/callback?plan=${planChoice || 'trial'}&isLogin=${isLogin}`,
       },
     });
   };
