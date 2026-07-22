@@ -106,3 +106,41 @@ export async function updateTenantStatus(tenantId: string, newStatus: string) {
   
   return true;
 }
+
+export async function deleteTenantCompletely(tenantId: string) {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll() { return cookieStore.getAll(); }, setAll() {} } }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || (user.email !== 'bobos@admin.com' && user.email !== 'momo@inventorysaas.com')) throw new Error("Unauthorized");
+
+  const adminClient = createSupabaseAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  
+  // 1. Fetch all users for this tenant to delete them from auth.users
+  const { data: usersData } = await adminClient.from("users").select("id").eq("tenant_id", tenantId);
+  
+  if (usersData && usersData.length > 0) {
+    for (const u of usersData) {
+      await adminClient.auth.admin.deleteUser(u.id);
+    }
+  }
+
+  // 2. Delete all related data manually to ensure no foreign key constraint errors
+  await adminClient.from("inventory_transactions").delete().eq("tenant_id", tenantId);
+  await adminClient.from("orders").delete().eq("tenant_id", tenantId);
+  await adminClient.from("products").delete().eq("tenant_id", tenantId);
+  await adminClient.from("suppliers").delete().eq("tenant_id", tenantId);
+  await adminClient.from("customers").delete().eq("tenant_id", tenantId);
+  await adminClient.from("users").delete().eq("tenant_id", tenantId);
+  
+  // 3. Delete the tenant itself
+  const { error } = await adminClient.from("tenants").delete().eq("id", tenantId);
+  
+  if (error) throw new Error(error.message);
+  
+  return true;
+}

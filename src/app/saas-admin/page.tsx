@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Check, Clock, ShieldAlert, MoreVertical, Ban, ArrowUpCircle, ArrowRight } from "lucide-react";
-import { getAllTenants, activateTenant, updateTenantPlan, updateTenantStatus } from "@/app/actions/admin";
+import { getAllTenants, activateTenant, updateTenantPlan, updateTenantStatus, deleteTenantCompletely } from "@/app/actions/admin";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -141,6 +141,17 @@ export default function SaaSAdminPage() {
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleAction(t.id, "الترقية للاحترافية", () => updateTenantPlan(t.id, 'pro'))} disabled={t.subscription_plan === 'pro'}>
                             <ArrowUpCircle className="w-4 h-4 ml-2 text-indigo-600" /> الترقية للاحترافية
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={() => {
+                              if (window.confirm("تحذير خطير: هل أنت متأكد من حذف هذه الشركة وكل بياناتها والمستخدمين نهائياً؟ هذا الإجراء لا يمكن التراجع عنه!")) {
+                                handleAction(t.id, "حذف الحساب نهائياً", () => deleteTenantCompletely(t.id));
+                              }
+                            }}
+                            className="text-red-600 focus:text-red-700 focus:bg-red-50"
+                          >
+                            <ShieldAlert className="w-4 h-4 ml-2" /> حذف الحساب نهائياً
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
