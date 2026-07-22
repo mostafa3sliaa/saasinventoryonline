@@ -59,7 +59,7 @@ export default function BillingPage() {
       // Update the tenant's subscription plan
       const { error } = await supabase
         .from('tenants')
-        .update({ subscription_plan: planId })
+        .update({ subscription_plan: planId, account_status: 'pending' })
         .eq('id', tenant.id);
 
       if (error) throw error;
