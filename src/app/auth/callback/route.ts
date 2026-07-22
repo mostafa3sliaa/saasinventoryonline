@@ -8,7 +8,6 @@ export async function GET(request: Request) {
   // if "next" is in param, use it as the redirect URL
   const next = searchParams.get('next') ?? '/dashboard'
   const planParam = searchParams.get('plan')
-  const isLoginParam = searchParams.get('isLogin')
 
   if (code) {
     const cookieStore = await cookies()
@@ -58,8 +57,9 @@ export async function GET(request: Request) {
         
       // A user is considered "new" if they don't exist OR if they exist but have no tenant_id (due to a DB trigger)
       if (!existingUser || !existingUser.tenant_id) {
-        // If the user clicked "Login" but they don't actually have an account
-        if (isLoginParam === 'true') {
+        // If they are a new user, they MUST have explicitly chosen a plan
+        const validPlans = ['trial', 'basic', 'pro'];
+        if (!planParam || !validPlans.includes(planParam)) {
           // Clean up the automatically created auth user (which should cascade to public.users)
           await adminClient.auth.admin.deleteUser(authData.user.id);
           // Just in case cascade is off, delete from public.users too
@@ -69,8 +69,8 @@ export async function GET(request: Request) {
           return NextResponse.redirect(`${origin}/login?error=must_choose_plan`);
         }
 
-        // Determine plan and status
-        const requestedPlan = planParam || authData.user.user_metadata?.plan_choice || 'trial';
+        // Determine plan and status based strictly on what they chose
+        const requestedPlan = planParam;
         const finalStatus = requestedPlan === 'trial' ? 'active' : 'pending';
 
         // Create a new tenant for the OAuth user
