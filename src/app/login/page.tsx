@@ -29,10 +29,7 @@ export default function LoginPage() {
 
     let authError = null;
     try {
-      let submitEmail = email;
-      if (!submitEmail.includes('@')) {
-         submitEmail = `${submitEmail}@inventorysaas.com`;
-      }
+      let submitEmail = email.trim().toLowerCase();
       
       let submitPassword = password;
       if (submitPassword === 'bobos') {
@@ -289,11 +286,11 @@ export default function LoginPage() {
             )}
             
             <div className="space-y-2 text-right">
-              <Label htmlFor="email" className="text-sm font-medium text-gray-700">اسم المستخدم</Label>
+              <Label htmlFor="email" className="text-sm font-medium text-gray-700">البريد الإلكتروني</Label>
               <Input
                 id="email"
-                type="text"
-                placeholder="أدخل الإيميل أو اسم المستخدم"
+                type="email"
+                placeholder="أدخل بريدك الإلكتروني (مثل: ahmed@example.com)"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
