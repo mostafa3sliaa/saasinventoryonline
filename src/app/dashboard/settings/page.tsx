@@ -12,6 +12,7 @@ import { createClient } from "@/utils/supabase/client";
 import { toast } from "sonner";
 import { UploadCloud, Image as ImageIcon, Shield, User, Trash2, AlertTriangle, Users, Settings, LogOut, Check, X, ShieldAlert, Palette, Building2, Plus, Pencil, Activity, Clock } from "lucide-react";
 import { logActivity } from "@/utils/logger";
+import { addTeamMember } from "@/app/actions/team";
 
 export default function SettingsPage() {
   const availablePages = [
@@ -197,29 +198,14 @@ export default function SettingsPage() {
          return;
       }
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/signup`, {
-        method: "POST",
-        headers: {
-          apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string,
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: newUserEmail,
-          password: newUserPassword,
-          data: {
-            full_name: newUserName,
-            role: newUserRole,
-            tenant_id: tenant.id,
-            permissions: { pages: newUserPages }
-          },
-        }),
+      await addTeamMember({
+        tenantId: tenant.id,
+        fullName: newUserName,
+        email: newUserEmail,
+        password: newUserPassword,
+        role: newUserRole,
+        pages: newUserPages
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.msg || data.message || "فشل إضافة المستخدم");
-      }
 
       logActivity(supabase, tenant?.id!, currentUser?.id!, "إضافة مستخدم جديد", "user");
       toast.success("تم إضافة المستخدم بنجاح!");
