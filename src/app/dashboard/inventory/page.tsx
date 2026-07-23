@@ -369,6 +369,7 @@ export default function InventoryPage() {
           />
         </div>
       </div>
+    </div>
 
       <div className="bg-white dark:bg-[#1E293B] rounded-xl border border-gray-100 dark:border-white/[0.06] overflow-x-auto">
         <Table>
