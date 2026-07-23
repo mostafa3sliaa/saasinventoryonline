@@ -117,28 +117,7 @@ export default function LoginPage() {
           {!isLogin && (
             <div className="text-right bg-white/10 backdrop-blur-md p-6 rounded-3xl border border-white/20 shadow-xl mt-8">
               <Label className="text-2xl font-bold text-white block mb-6 text-center">اختر باقتك</Label>
-              <div className="grid grid-cols-3 gap-6">
-                {/* Trial */}
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setPlanChoice('trial')}
-                  className={`relative flex flex-col h-full items-start p-5 rounded-2xl border-2 transition-all cursor-pointer ${
-                    planChoice === 'trial' ? 'border-white bg-white/20 scale-105 shadow-2xl z-10' : 'border-white/20 hover:border-white/40 bg-white/5 hover:bg-white/10'
-                  }`}
-                >
-                  <div className="text-lg font-bold text-white mb-2">التجربة المجانية</div>
-                  <div className="text-sm font-bold text-white border border-white/40 px-3 py-1 rounded-full mb-4">5 أيام مجاناً</div>
-                  <ul className="space-y-2 mt-1 w-full flex-1 mb-4">
-                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> جرب كل المميزات مجاناً</li>
-                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> بدون بطاقة ائتمان</li>
-                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> تقارير مبيعات أساسية</li>
-                  </ul>
-                  <div className={`w-full mt-auto py-2.5 rounded-xl text-sm font-bold transition-all text-center ${planChoice === 'trial' ? 'bg-white text-indigo-700 shadow-md' : 'bg-white/10 text-white hover:bg-white/20'}`}>
-                    {planChoice === 'trial' ? 'تم الاختيار' : 'اختر الباقة'}
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-2 gap-6">
                 {/* Basic */}
                 <div
                   role="button"
@@ -151,11 +130,10 @@ export default function LoginPage() {
                   <div className="text-lg font-bold text-white mb-2">الباقة الأساسية</div>
                   <div className="text-sm font-bold text-white border border-white/40 px-3 py-1 rounded-full mb-4">499 ج.م / شهر</div>
                   <ul className="space-y-2 mt-1 w-full flex-1 mb-4">
-                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> حتى 500 طلب شهرياً</li>
-                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> 2 مستخدمين بصلاحيات</li>
-                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> إدارة المنتجات والمخزون</li>
-                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> طباعة الباركود والفواتير</li>
-                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> حسابات الموردين والخزنة</li>
+                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> تجربة مجانية لمدة 15 يوماً</li>
+                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> عدد طلبات غير محدود</li>
+                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> حتى 5 مستخدمين بصلاحيات</li>
+                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> إدارة المنتجات والمخزون والفواتير</li>
                   </ul>
                   <div className={`w-full mt-auto py-2.5 rounded-xl text-sm font-bold transition-all text-center ${planChoice === 'basic' ? 'bg-white text-indigo-700 shadow-md' : 'bg-white/10 text-white hover:bg-white/20'}`}>
                     {planChoice === 'basic' ? 'تم الاختيار' : 'اختر الباقة'}
@@ -177,11 +155,10 @@ export default function LoginPage() {
                   <div className="text-lg font-bold text-white mb-2 mt-1">الباقة الاحترافية</div>
                   <div className="text-sm font-bold text-white border border-white/40 px-3 py-1 rounded-full mb-4">999 ج.م / شهر</div>
                   <ul className="space-y-2 mt-1 w-full flex-1 mb-4">
-                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> حتى 2000 طلب شهرياً</li>
-                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> 5 مستخدمين بصلاحيات</li>
-                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> الذكاء الاصطناعي للطلبات</li>
-                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> استيراد سريع عبر إكسيل</li>
-                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> طباعة الباركود والفواتير</li>
+                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> تجربة مجانية لمدة 15 يوماً</li>
+                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> مستخدمين غير محدودين</li>
+                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> استيراد مفتوح عبر الإكسيل</li>
+                    <li className="flex items-start gap-2 text-xs text-white leading-relaxed"><Check className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-300" /> الذكاء الاصطناعي وتقارير متقدمة</li>
                   </ul>
                   <div className={`w-full mt-auto py-2.5 rounded-xl text-sm font-bold transition-all text-center ${planChoice === 'pro' ? 'bg-white text-indigo-700 shadow-md' : 'bg-white/10 text-white hover:bg-white/20'}`}>
                     {planChoice === 'pro' ? 'تم الاختيار' : 'اختر الباقة'}
@@ -225,16 +202,16 @@ export default function LoginPage() {
                 <div className="grid grid-cols-1 gap-3">
                 <button
                   type="button"
-                  onClick={() => setPlanChoice('trial')}
+                  onClick={() => setPlanChoice('basic')}
                   className={`relative flex flex-col items-start p-4 rounded-xl border-2 transition-all ${
-                    planChoice === 'trial' ? 'border-indigo-600 bg-indigo-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'
+                    planChoice === 'basic' ? 'border-indigo-600 bg-indigo-50/50' : 'border-gray-100 hover:border-gray-200 bg-white'
                   }`}
                 >
                   <div className="flex items-center justify-between w-full mb-1">
-                    <span className={`font-bold ${planChoice === 'trial' ? 'text-indigo-900' : 'text-gray-900'}`}>التجربة المجانية</span>
-                    <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-full">5 أيام</span>
+                    <span className={`font-bold ${planChoice === 'basic' ? 'text-indigo-900' : 'text-gray-900'}`}>الباقة الأساسية</span>
+                    <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-full">15 يوم مجاناً</span>
                   </div>
-                  <span className="text-xs text-gray-500">جرب النظام بالكامل مجاناً</span>
+                  <span className="text-xs text-gray-500">حتى 5 مستخدمين - طلبات غير محدودة</span>
                 </button>
 
                 <button
@@ -249,9 +226,9 @@ export default function LoginPage() {
                   </div>
                   <div className="flex items-center justify-between w-full mb-1">
                     <span className={`font-bold ${planChoice === 'pro' ? 'text-indigo-900' : 'text-gray-900'}`}>الباقة الاحترافية</span>
-                    <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">999 ج.م</span>
+                    <span className="text-xs font-bold bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">15 يوم مجاناً</span>
                   </div>
-                  <span className="text-xs text-gray-500">للشركات والمتاجر الاحترافية</span>
+                  <span className="text-xs text-gray-500">مستخدمين غير محدودين - استيراد وذكاء اصطناعي</span>
                 </button>
               </div>
             </div>

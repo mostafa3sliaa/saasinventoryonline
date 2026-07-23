@@ -12,10 +12,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Plus, Search, User, TrendingDown, TrendingUp, Users, ArrowUpRight, ArrowDownRight, UserPlus, Wallet, Edit2, AlertTriangle, Package, ShoppingCart } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { toast } from "sonner";
 import { useTenant } from "@/components/shared/TenantProvider";
+import * as XLSX from "xlsx";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { importExcelProducts } from "@/app/actions/import-excel";
 
 export default function InventoryPage() {
   const { tenant } = useTenant();
@@ -29,6 +33,10 @@ export default function InventoryPage() {
     totalBought: 0,
     totalReturned: 0,
   });
+  
+  // Import State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   const supabase = createClient();
 
@@ -234,6 +242,68 @@ export default function InventoryPage() {
 
   const totalSold = inventoryStats.totalBought - inventoryStats.totalReturned - totalInStock;
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        try {
+          const bstr = evt.target?.result;
+          const wb = XLSX.read(bstr, { type: 'binary' });
+          const wsname = wb.SheetNames[0];
+          const ws = wb.Sheets[wsname];
+          const data = XLSX.utils.sheet_to_json(ws);
+
+          if (data.length === 0) {
+            toast.error("الملف فارغ");
+            setIsImporting(false);
+            return;
+          }
+
+          const res = await importExcelProducts(data);
+          
+          if (res.success) {
+            toast.success(`تم استيراد ${res.count} منتج/تنوع بنجاح!`);
+            setIsImportModalOpen(false);
+            fetchProducts(productsLimit); // refresh
+          } else {
+            if (res.error === "quota_exceeded") {
+               toast.error("تجاوزت الحد المسموح!", { description: res.message, duration: 8000 });
+            } else {
+               toast.error(res.message || "حدث خطأ أثناء الاستيراد");
+            }
+          }
+        } catch (err: any) {
+          toast.error("حدث خطأ في قراءة الملف");
+        } finally {
+          setIsImporting(false);
+        }
+      };
+      reader.readAsBinaryString(file);
+    } catch (err) {
+      setIsImporting(false);
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.json_to_sheet([{
+      "الاسم": "تيشيرت بولو",
+      "القسم": "ملابس",
+      "الوصف": "تيشيرت قطن 100%",
+      "الباركود": "123456789",
+      "سعر البيع": 150,
+      "التكلفة": 100,
+      "الكمية": 50,
+      "sku": "TSH-POL-01"
+    }]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "المنتجات");
+    XLSX.writeFile(wb, "نموذج_استيراد_المنتجات.xlsx");
+  };
+
   return (
     <div className="space-y-6">
       {/* Overview Stats */}
@@ -284,7 +354,11 @@ export default function InventoryPage() {
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">المخزون</h2>
           <p className="text-sm text-gray-500 mt-1">إدارة منتجاتك وكمياتها</p>
         </div>
-        <div className="relative w-full sm:w-80">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <Button onClick={() => setIsImportModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 font-bold">
+            <Package className="w-4 h-4" /> استيراد إكسيل
+          </Button>
+          <div className="relative flex-1 sm:w-80">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input 
             type="text" 
@@ -403,6 +477,52 @@ export default function InventoryPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
+        <DialogContent className="max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>استيراد المنتجات من إكسيل</DialogTitle>
+            <DialogDescription>
+              قم برفع ملف الإكسيل لإضافة آلاف المنتجات بضغطة زر.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {tenant?.subscription_plan === 'basic' && (
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-2 text-sm text-blue-800 leading-relaxed">
+              <strong>تنبيه الباقة الأساسية:</strong> يحق لك الاستيراد <span className="font-bold">مرتين فقط يومياً</span> بحد أقصى <span className="font-bold">20 يوماً</span> في الشهر.
+              للتمتع باستيراد غير محدود، جرب الباقة الاحترافية 15 يوماً مجاناً!
+            </div>
+          )}
+
+          <div className="flex flex-col gap-6 py-4">
+            <div className="text-center p-6 border-2 border-dashed border-gray-200 rounded-2xl hover:bg-gray-50 transition-colors">
+              <Input 
+                type="file" 
+                accept=".xlsx, .xls, .csv" 
+                onChange={handleFileUpload}
+                disabled={isImporting}
+                className="hidden"
+                id="excel-upload"
+              />
+              <Label htmlFor="excel-upload" className="cursor-pointer flex flex-col items-center gap-3">
+                <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center">
+                  <Package className="w-6 h-6" />
+                </div>
+                <span className="font-bold text-gray-700">
+                  {isImporting ? "جاري الاستيراد..." : "اضغط هنا لاختيار ملف الإكسيل"}
+                </span>
+                <span className="text-xs text-gray-500">صيغ مدعومة: XLSX, CSV</span>
+              </Label>
+            </div>
+            
+            <div className="text-center">
+              <Button variant="outline" onClick={handleDownloadTemplate} className="text-xs">
+                تحميل نموذج الإكسيل الفارغ
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

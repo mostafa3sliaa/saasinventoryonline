@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Check, Clock, ShieldAlert, MoreVertical, Ban, ArrowUpCircle, ArrowRight } from "lucide-react";
-import { getAllTenants, activateTenant, updateTenantPlan, updateTenantStatus, deleteTenantCompletely } from "@/app/actions/admin";
+import { getAllTenants, activateTenant, updateTenantPlan, updateTenantStatus, deleteTenantCompletely, extendSubscription } from "@/app/actions/admin";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -141,6 +141,17 @@ export default function SaaSAdminPage() {
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleAction(t.id, "الترقية للاحترافية", () => updateTenantPlan(t.id, 'pro'))} disabled={t.subscription_plan === 'pro'}>
                             <ArrowUpCircle className="w-4 h-4 ml-2 text-indigo-600" /> الترقية للاحترافية
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuLabel className="text-xs text-gray-500 font-bold">تمديد الاشتراك</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => handleAction(t.id, "تمديد شهر", () => extendSubscription(t.id, 1))}>
+                            <Clock className="w-4 h-4 ml-2 text-emerald-600" /> تمديد 1 شهر
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleAction(t.id, "تمديد 6 شهور", () => extendSubscription(t.id, 6))}>
+                            <Clock className="w-4 h-4 ml-2 text-emerald-600" /> تمديد 6 شهور
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleAction(t.id, "تمديد سنة", () => extendSubscription(t.id, 12))}>
+                            <Clock className="w-4 h-4 ml-2 text-emerald-600" /> تمديد 12 شهر
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem 

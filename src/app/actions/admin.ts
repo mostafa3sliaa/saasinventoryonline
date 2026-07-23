@@ -144,3 +144,35 @@ export async function deleteTenantCompletely(tenantId: string) {
   
   return true;
 }
+
+export async function extendSubscription(tenantId: string, monthsToAdd: number) {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll() { return cookieStore.getAll(); }, setAll() {} } }
+  );
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || (user.email !== 'bobos@admin.com' && user.email !== 'momo@inventorysaas.com')) throw new Error("Unauthorized");
+
+  const adminClient = createSupabaseAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  
+  const { data: tenant } = await adminClient.from("tenants").select("trial_ends_at").eq("id", tenantId).single();
+  
+  let currentEnd = tenant?.trial_ends_at ? new Date(tenant.trial_ends_at) : new Date();
+  if (currentEnd < new Date()) {
+    currentEnd = new Date();
+  }
+  
+  currentEnd.setMonth(currentEnd.getMonth() + monthsToAdd);
+  
+  const { error } = await adminClient.from("tenants").update({ 
+    trial_ends_at: currentEnd.toISOString(),
+    account_status: "active" 
+  }).eq("id", tenantId);
+  
+  if (error) throw new Error(error.message);
+  
+  return true;
+}

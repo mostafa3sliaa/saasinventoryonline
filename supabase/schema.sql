@@ -10,7 +10,11 @@ CREATE TABLE tenants (
   logo_url TEXT,
   subscription_plan TEXT DEFAULT 'trial',
   account_status TEXT DEFAULT 'pending',
-  trial_ends_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '5 days',
+  trial_ends_at TIMESTAMPTZ DEFAULT NOW() + INTERVAL '15 days',
+  daily_import_count INT DEFAULT 0,
+  monthly_import_days INT DEFAULT 0,
+  last_import_date DATE,
+  current_quota_month TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

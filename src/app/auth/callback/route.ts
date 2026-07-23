@@ -62,7 +62,7 @@ export async function GET(request: Request) {
       
       if (!existingUser || !existingUser.tenant_id || isNewUserByTime) {
         // If they are a new user, they MUST have explicitly chosen a plan
-        const validPlans = ['trial', 'basic', 'pro'];
+        const validPlans = ['basic', 'pro'];
         if (!planParam || !validPlans.includes(planParam)) {
           // If the DB trigger already created a tenant, we MUST delete it to avoid garbage
           if (existingUser && existingUser.tenant_id) {
@@ -81,14 +81,15 @@ export async function GET(request: Request) {
 
         // They chose a valid plan
         const requestedPlan = planParam;
-        const finalStatus = requestedPlan === 'trial' ? 'active' : 'pending';
+        const finalStatus = 'active'; // Always active during 15-day trial
 
         if (existingUser && existingUser.tenant_id) {
           // The trigger already created the tenant and user, but probably with default 'trial' plan
-          // We need to update the tenant to reflect their actual chosen plan
+          // We need to update the tenant to reflect their actual chosen plan and 15 days
           await adminClient.from('tenants').update({
             subscription_plan: requestedPlan,
             account_status: finalStatus,
+            trial_ends_at: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
           }).eq('id', existingUser.tenant_id);
           
         } else {
@@ -99,7 +100,7 @@ export async function GET(request: Request) {
               name: authData.user.user_metadata?.full_name || authData.user.user_metadata?.name || 'شركة جديدة',
               subscription_plan: requestedPlan,
               account_status: finalStatus,
-              trial_ends_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+              trial_ends_at: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
             })
             .select()
             .single();
